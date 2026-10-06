@@ -1,6 +1,7 @@
 package com.lazorenkoo.relayforge.endpoint;
 
 import java.net.URI;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,10 @@ public class EndpointService {
         WebhookEndpoint endpoint = new WebhookEndpoint();
         endpoint.setUrl(url);
         return endpointRepository.save(endpoint);
+    }
+
+    public List<WebhookEndpoint> findAll() {
+        return endpointRepository.findAll();
     }
 
     private void validateUrl(String url) {
