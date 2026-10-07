@@ -19,6 +19,11 @@ public class EventService {
         return eventRepository.findAll();
     }
 
+    public Event findById(Long id) {
+        return eventRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+    }
+
     public Event create(String type, String payload) {
         if (type == null || type.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event type is required");
