@@ -28,6 +28,11 @@ public class EndpointService {
         return endpointRepository.findAll();
     }
 
+    public WebhookEndpoint findById(Long id) {
+        return endpointRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Endpoint not found"));
+    }
+
     private void validateUrl(String url) {
         if (url == null || url.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL is required");
