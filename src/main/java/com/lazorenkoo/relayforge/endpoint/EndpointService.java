@@ -33,6 +33,12 @@ public class EndpointService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Endpoint not found"));
     }
 
+    public WebhookEndpoint disable(Long id) {
+        WebhookEndpoint endpoint = findById(id);
+        endpoint.setEnabled(false);
+        return endpointRepository.save(endpoint);
+    }
+
     private void validateUrl(String url) {
         if (url == null || url.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL is required");

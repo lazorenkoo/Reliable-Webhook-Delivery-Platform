@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +30,11 @@ public class EndpointController {
     @GetMapping("/{id}")
     public WebhookEndpoint findById(@PathVariable Long id) {
         return endpointService.findById(id);
+    }
+
+    @PatchMapping("/{id}/disable")
+    public WebhookEndpoint disable(@PathVariable Long id) {
+        return endpointService.disable(id);
     }
 
     @PostMapping
