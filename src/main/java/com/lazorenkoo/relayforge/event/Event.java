@@ -1,9 +1,12 @@
 package com.lazorenkoo.relayforge.event;
 
+import java.time.Instant;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -16,6 +19,16 @@ public class Event {
 
     private String type;
     private String payload;
+    private Instant createdAt;
+
+    @PrePersist
+    private void onCreate() {
+        createdAt = Instant.now();
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 
     public Long getId() {
         return id;
