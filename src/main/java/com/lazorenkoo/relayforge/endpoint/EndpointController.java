@@ -37,6 +37,11 @@ public class EndpointController {
         return endpointService.disable(id);
     }
 
+    @PatchMapping("/{id}/enable")
+    public WebhookEndpoint enable(@PathVariable Long id) {
+        return endpointService.enable(id);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public WebhookEndpoint create(@RequestBody CreateEndpointRequest request) {

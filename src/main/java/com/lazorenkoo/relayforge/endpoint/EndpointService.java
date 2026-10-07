@@ -39,6 +39,12 @@ public class EndpointService {
         return endpointRepository.save(endpoint);
     }
 
+    public WebhookEndpoint enable(Long id) {
+        WebhookEndpoint endpoint = findById(id);
+        endpoint.setEnabled(true);
+        return endpointRepository.save(endpoint);
+    }
+
     private void validateUrl(String url) {
         if (url == null || url.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL is required");
