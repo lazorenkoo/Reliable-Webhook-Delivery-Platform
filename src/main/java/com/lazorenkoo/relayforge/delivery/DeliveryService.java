@@ -23,7 +23,7 @@ public class DeliveryService {
         this.webhookSender = webhookSender;
     }
 
-    public int send(Long eventId, Long endpointId) throws IOException, InterruptedException {
+    public int send(Long eventId, Long endpointId) {
         if (eventId == null || eventId <= 0 || endpointId == null || endpointId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event and endpoint IDs must be positive");
         }
@@ -34,6 +34,13 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
 
-        return webhookSender.send(endpoint.getUrl(), event.getPayload());
+        try {
+            return webhookSender.send(endpoint.getUrl(), event.getPayload());
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Webhook delivery interrupted", exception);
+        }
     }
 }

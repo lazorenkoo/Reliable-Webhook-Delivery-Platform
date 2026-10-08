@@ -1,7 +1,5 @@
 package com.lazorenkoo.relayforge.delivery;
 
-import java.io.IOException;
-
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +16,7 @@ public class DeliveryController {
     }
 
     @PostMapping
-    public int send(@RequestBody CreateDeliveryRequest request) throws IOException, InterruptedException {
+    public int send(@RequestBody CreateDeliveryRequest request) {
         return deliveryService.send(request.getEventId(), request.getEndpointId());
     }
 }
