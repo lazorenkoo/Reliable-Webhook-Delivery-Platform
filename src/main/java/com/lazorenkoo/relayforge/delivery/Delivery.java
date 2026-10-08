@@ -18,6 +18,7 @@ public class Delivery {
 
     private Long eventId;
     private Long endpointId;
+    private Integer httpStatus;
 
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status = DeliveryStatus.PENDING;
@@ -40,6 +41,14 @@ public class Delivery {
 
     public void setEndpointId(Long endpointId) {
         this.endpointId = endpointId;
+    }
+
+    public Integer getHttpStatus() {
+        return httpStatus;
+    }
+
+    public void setHttpStatus(Integer httpStatus) {
+        this.httpStatus = httpStatus;
     }
 
     public DeliveryStatus getStatus() {
