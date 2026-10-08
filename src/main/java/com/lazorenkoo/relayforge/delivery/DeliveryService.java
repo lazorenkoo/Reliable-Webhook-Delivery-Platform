@@ -1,6 +1,7 @@
 package com.lazorenkoo.relayforge.delivery;
 
 import java.io.IOException;
+import java.util.List;
 
 import com.lazorenkoo.relayforge.endpoint.EndpointService;
 import com.lazorenkoo.relayforge.endpoint.WebhookEndpoint;
@@ -24,6 +25,10 @@ public class DeliveryService {
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
         this.deliveryRepository = deliveryRepository;
+    }
+
+    public List<Delivery> findAll() {
+        return deliveryRepository.findAll();
     }
 
     public int send(Long eventId, Long endpointId) {

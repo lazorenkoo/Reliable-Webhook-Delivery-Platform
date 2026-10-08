@@ -1,5 +1,8 @@
 package com.lazorenkoo.relayforge.delivery;
 
+import java.util.List;
+
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +16,11 @@ public class DeliveryController {
 
     public DeliveryController(DeliveryService deliveryService) {
         this.deliveryService = deliveryService;
+    }
+
+    @GetMapping
+    public List<Delivery> findAll() {
+        return deliveryService.findAll();
     }
 
     @PostMapping
