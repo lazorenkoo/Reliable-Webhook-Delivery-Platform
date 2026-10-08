@@ -16,7 +16,8 @@ public class DeliveryController {
     }
 
     @PostMapping
-    public int send(@RequestBody CreateDeliveryRequest request) {
-        return deliveryService.send(request.getEventId(), request.getEndpointId());
+    public DeliveryResponse send(@RequestBody CreateDeliveryRequest request) {
+        int httpStatus = deliveryService.send(request.getEventId(), request.getEndpointId());
+        return new DeliveryResponse(httpStatus);
     }
 }
