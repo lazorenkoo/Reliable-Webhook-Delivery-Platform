@@ -3,6 +3,7 @@ package com.lazorenkoo.relayforge.delivery;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.lazorenkoo.relayforge.endpoint.EndpointService;
 import com.lazorenkoo.relayforge.endpoint.WebhookEndpoint;
@@ -65,6 +66,7 @@ class DeliveryServiceTest {
 
         assertEquals(List.of(DeliveryStatus.PENDING, DeliveryStatus.SUCCEEDED), savedStatuses);
         assertEquals(204, savedDelivery.getHttpStatus());
+        assertNull(savedDelivery.getLastError());
         assertEquals(1L, savedDelivery.getEventId());
         assertEquals(2L, savedDelivery.getEndpointId());
         verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}");
@@ -79,6 +81,7 @@ class DeliveryServiceTest {
 
         assertEquals(List.of(DeliveryStatus.PENDING, DeliveryStatus.FAILED), savedStatuses);
         assertEquals(500, savedDelivery.getHttpStatus());
+        assertEquals("Receiver returned HTTP 500", savedDelivery.getLastError());
     }
 
     @Test
@@ -90,6 +93,7 @@ class DeliveryServiceTest {
                 () -> deliveryService.send(1L, 2L));
 
         assertEquals(502, exception.getStatusCode().value());
+        assertTrue(savedDelivery.getLastError().contains("Connection failed"));
         assertEquals(List.of(DeliveryStatus.PENDING, DeliveryStatus.FAILED), savedStatuses);
         assertNull(savedDelivery.getHttpStatus());
     }
@@ -125,11 +129,38 @@ class DeliveryServiceTest {
                     () -> deliveryService.send(1L, 2L));
 
             assertEquals(503, exception.getStatusCode().value());
+            assertEquals("Webhook delivery interrupted", savedDelivery.getLastError());
             assertTrue(Thread.currentThread().isInterrupted());
             assertEquals(List.of(DeliveryStatus.PENDING, DeliveryStatus.FAILED), savedStatuses);
             assertNull(savedDelivery.getHttpStatus());
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    void returnsSavedDeliveryWithErrorDetails() {
+        Delivery delivery = new Delivery();
+        delivery.setStatus(DeliveryStatus.FAILED);
+        delivery.setHttpStatus(500);
+        delivery.setLastError("Receiver returned HTTP 500");
+        when(deliveryRepository.findById(3L)).thenReturn(Optional.of(delivery));
+
+        Delivery result = deliveryService.findById(3L);
+
+        assertSame(delivery, result);
+        assertEquals("Receiver returned HTTP 500", result.getLastError());
+        verifyNoInteractions(webhookSender);
+    }
+
+    @Test
+    void returnsNotFoundForMissingDelivery() {
+        when(deliveryRepository.findById(3L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> deliveryService.findById(3L));
+
+        assertEquals(404, exception.getStatusCode().value());
+        verifyNoInteractions(webhookSender);
     }
 }

@@ -2,6 +2,7 @@ package com.lazorenkoo.relayforge.delivery;
 
 import java.time.Instant;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,6 +26,9 @@ public class Delivery {
     private Instant createdAt;
     private Instant completedAt;
 
+    @Column(columnDefinition = "text")
+    private String lastError;
+
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status = DeliveryStatus.PENDING;
 
@@ -43,6 +47,14 @@ public class Delivery {
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
     }
 
     public Long getId() {

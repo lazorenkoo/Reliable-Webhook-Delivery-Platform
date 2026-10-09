@@ -32,6 +32,11 @@ public class DeliveryService {
         return deliveryRepository.findAll();
     }
 
+    public Delivery findById(Long id) {
+        return deliveryRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
+    }
+
     public int send(Long eventId, Long endpointId) {
         if (eventId == null || eventId <= 0 || endpointId == null || endpointId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event and endpoint IDs must be positive");
@@ -55,16 +60,19 @@ public class DeliveryService {
                 delivery.setStatus(DeliveryStatus.SUCCEEDED);
             } else {
                 delivery.setStatus(DeliveryStatus.FAILED);
+                delivery.setLastError("Receiver returned HTTP " + httpStatus);
             }
             delivery.setCompletedAt(Instant.now());
             deliveryRepository.save(delivery);
             return httpStatus;
         } catch (IOException exception) {
+            delivery.setLastError(exception.toString());
             delivery.setStatus(DeliveryStatus.FAILED);
             delivery.setCompletedAt(Instant.now());
             deliveryRepository.save(delivery);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
         } catch (InterruptedException exception) {
+            delivery.setLastError("Webhook delivery interrupted");
             try {
                 delivery.setStatus(DeliveryStatus.FAILED);
                 delivery.setCompletedAt(Instant.now());
