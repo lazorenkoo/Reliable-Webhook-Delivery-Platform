@@ -1,11 +1,14 @@
 package com.lazorenkoo.relayforge.delivery;
 
+import java.time.Instant;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
@@ -19,9 +22,19 @@ public class Delivery {
     private Long eventId;
     private Long endpointId;
     private Integer httpStatus;
+    private Instant createdAt;
 
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status = DeliveryStatus.PENDING;
+
+    @PrePersist
+    private void onCreate() {
+        createdAt = Instant.now();
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 
     public Long getId() {
         return id;
