@@ -46,6 +46,11 @@ class DeliveryServiceTest {
         when(endpointService.findById(2L)).thenReturn(endpoint);
         when(deliveryRepository.save(any(Delivery.class))).thenAnswer(invocation -> {
             savedDelivery = invocation.getArgument(0);
+            if (savedDelivery.getStatus() == DeliveryStatus.PENDING) {
+                assertNull(savedDelivery.getCompletedAt());
+            } else {
+                assertNotNull(savedDelivery.getCompletedAt());
+            }
             savedStatuses.add(savedDelivery.getStatus());
             return savedDelivery;
         });

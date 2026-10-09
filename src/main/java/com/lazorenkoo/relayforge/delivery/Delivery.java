@@ -23,6 +23,7 @@ public class Delivery {
     private Long endpointId;
     private Integer httpStatus;
     private Instant createdAt;
+    private Instant completedAt;
 
     @Enumerated(EnumType.STRING)
     private DeliveryStatus status = DeliveryStatus.PENDING;
@@ -34,6 +35,14 @@ public class Delivery {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(Instant completedAt) {
+        this.completedAt = completedAt;
     }
 
     public Long getId() {

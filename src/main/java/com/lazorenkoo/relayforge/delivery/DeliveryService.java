@@ -1,6 +1,7 @@
 package com.lazorenkoo.relayforge.delivery;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 
 import com.lazorenkoo.relayforge.endpoint.EndpointService;
@@ -55,15 +56,18 @@ public class DeliveryService {
             } else {
                 delivery.setStatus(DeliveryStatus.FAILED);
             }
+            delivery.setCompletedAt(Instant.now());
             deliveryRepository.save(delivery);
             return httpStatus;
         } catch (IOException exception) {
             delivery.setStatus(DeliveryStatus.FAILED);
+            delivery.setCompletedAt(Instant.now());
             deliveryRepository.save(delivery);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
         } catch (InterruptedException exception) {
             try {
                 delivery.setStatus(DeliveryStatus.FAILED);
+                delivery.setCompletedAt(Instant.now());
                 deliveryRepository.save(delivery);
             } finally {
                 Thread.currentThread().interrupt();
