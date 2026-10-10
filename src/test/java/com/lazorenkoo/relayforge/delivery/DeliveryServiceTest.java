@@ -163,4 +163,37 @@ class DeliveryServiceTest {
         assertEquals(404, exception.getStatusCode().value());
         verifyNoInteractions(webhookSender);
     }
+
+    @Test
+    void sendsPendingDeliveryWithoutCreatingAnotherRecord() throws Exception {
+        prepareDelivery(true);
+        Delivery delivery = new Delivery();
+        delivery.setEventId(1L);
+        delivery.setEndpointId(2L);
+        when(deliveryRepository.findById(3L)).thenReturn(Optional.of(delivery));
+        when(webhookSender.send(anyString(), anyString())).thenReturn(204);
+
+        assertEquals(204, deliveryService.sendPending(3L));
+
+        assertSame(delivery, savedDelivery);
+        assertEquals(List.of(DeliveryStatus.SUCCEEDED), savedStatuses);
+        assertEquals(204, delivery.getHttpStatus());
+        assertNotNull(delivery.getCompletedAt());
+        verify(deliveryRepository, times(1)).save(same(delivery));
+        verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}");
+    }
+
+    @Test
+    void rejectsCompletedDeliveryBeforeSending() {
+        Delivery delivery = new Delivery();
+        delivery.setStatus(DeliveryStatus.SUCCEEDED);
+        when(deliveryRepository.findById(3L)).thenReturn(Optional.of(delivery));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> deliveryService.sendPending(3L));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verifyNoInteractions(eventService, endpointService, webhookSender);
+        verify(deliveryRepository, never()).save(any());
+    }
 }
