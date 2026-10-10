@@ -2,8 +2,13 @@ package com.lazorenkoo.relayforge.event;
 
 import java.util.List;
 
+import com.lazorenkoo.relayforge.delivery.Delivery;
+import com.lazorenkoo.relayforge.delivery.DeliveryRepository;
+import com.lazorenkoo.relayforge.endpoint.EndpointRepository;
+import com.lazorenkoo.relayforge.endpoint.WebhookEndpoint;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
@@ -14,10 +19,15 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final JsonMapper jsonMapper;
+    private final EndpointRepository endpointRepository;
+    private final DeliveryRepository deliveryRepository;
 
-    public EventService(EventRepository eventRepository, JsonMapper jsonMapper) {
+    public EventService(EventRepository eventRepository, JsonMapper jsonMapper,
+                        EndpointRepository endpointRepository, DeliveryRepository deliveryRepository) {
         this.eventRepository = eventRepository;
         this.jsonMapper = jsonMapper;
+        this.endpointRepository = endpointRepository;
+        this.deliveryRepository = deliveryRepository;
     }
 
     public List<Event> findAll() {
@@ -29,6 +39,7 @@ public class EventService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
     }
 
+    @Transactional
     public Event create(String type, String payload) {
         if (type == null || type.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event type is required");
@@ -51,6 +62,15 @@ public class EventService {
         Event event = new Event();
         event.setType(type);
         event.setPayload(payload);
-        return eventRepository.save(event);
+        Event savedEvent = eventRepository.save(event);
+
+        List<WebhookEndpoint> endpoints = endpointRepository.findSubscribedEndpoints(type);
+        for (WebhookEndpoint endpoint : endpoints) {
+            Delivery delivery = new Delivery();
+            delivery.setEventId(savedEvent.getId());
+            delivery.setEndpointId(endpoint.getId());
+            deliveryRepository.save(delivery);
+        }
+        return savedEvent;
     }
 }
