@@ -73,6 +73,25 @@ public class DeliveryService {
         delivery.setEndpointId(endpointId);
         delivery = deliveryRepository.save(delivery);
 
+        return sendDelivery(delivery, event, endpoint);
+    }
+
+    public int sendPending(Long id) {
+        Delivery delivery = findById(id);
+        if (delivery.getStatus() != DeliveryStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is not pending");
+        }
+
+        Event event = eventService.findById(delivery.getEventId());
+        WebhookEndpoint endpoint = endpointService.findById(delivery.getEndpointId());
+        if (!endpoint.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
+        }
+
+        return sendDelivery(delivery, event, endpoint);
+    }
+
+    private int sendDelivery(Delivery delivery, Event event, WebhookEndpoint endpoint) {
         try {
             int httpStatus = webhookSender.send(endpoint.getUrl(), event.getPayload());
             delivery.setHttpStatus(httpStatus);
