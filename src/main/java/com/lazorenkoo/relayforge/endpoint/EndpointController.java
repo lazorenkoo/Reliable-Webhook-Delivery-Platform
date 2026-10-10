@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -42,9 +43,14 @@ public class EndpointController {
         return endpointService.enable(id);
     }
 
+    @PutMapping("/{id}/subscriptions")
+    public WebhookEndpoint updateSubscriptions(@PathVariable Long id,
+                                               @RequestBody UpdateSubscriptionsRequest request) {
+        return endpointService.updateSubscriptions(id, request.getSubscribedEvents());
+    }
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public WebhookEndpoint create(@RequestBody CreateEndpointRequest request) {
-        return endpointService.create(request.getUrl());
+        return endpointService.create(request.getUrl(), request.getSubscribedEvents());
     }
 }
