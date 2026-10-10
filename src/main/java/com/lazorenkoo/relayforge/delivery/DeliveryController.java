@@ -31,6 +31,12 @@ public class DeliveryController {
         return deliveryService.findById(id);
     }
 
+    @PostMapping("/{id}/retry")
+    public DeliveryResponse retry(@PathVariable Long id) {
+        int httpStatus = deliveryService.retry(id);
+        return new DeliveryResponse(httpStatus);
+    }
+
     @PostMapping
     public DeliveryResponse send(@RequestBody CreateDeliveryRequest request) {
         int httpStatus = deliveryService.send(request.getEventId(), request.getEndpointId());

@@ -254,6 +254,56 @@ class DeliveryIntegrationTest {
         assertEquals(400, send("GET", "/api/v1/deliveries?eventId=abc", null).statusCode());
         assertEquals(0, deliveryRepository.count());
     }
+    @Test
+    void retriesFailedDeliveryAndPreservesOriginalHistory() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{\"orderId\":1}");
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        Delivery original = deliveryRepository.findAll().getFirst();
+        receiverStatus.set(200);
+
+        HttpResponse<String> response = send("POST",
+                "/api/v1/deliveries/" + original.getId() + "/retry", null);
+
+        assertEquals(200, response.statusCode());
+        assertTrue(jsonMapper.readTree(response.body()).get("successful").asBoolean());
+        assertEquals(2, deliveryRepository.count());
+        Delivery previous = deliveryRepository.findById(original.getId()).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, previous.getStatus());
+        assertEquals(500, previous.getHttpStatus());
+        assertEquals(original.getCompletedAt(), previous.getCompletedAt());
+        Delivery retried = deliveryRepository.findByStatus(DeliveryStatus.SUCCEEDED).getFirst();
+        assertNotEquals(original.getId(), retried.getId());
+        assertEquals(eventId, retried.getEventId());
+        assertEquals(endpointId, retried.getEndpointId());
+        assertEquals(200, retried.getHttpStatus());
+    }
+
+    @Test
+    void rejectsRetryOfSuccessfulDelivery() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        Delivery delivery = deliveryRepository.findAll().getFirst();
+        receivedPayload.set(null);
+
+        HttpResponse<String> response = send("POST",
+                "/api/v1/deliveries/" + delivery.getId() + "/retry", null);
+
+        assertEquals(409, response.statusCode());
+        assertEquals(1, deliveryRepository.count());
+        assertNull(receivedPayload.get());
+    }
+
+    @Test
+    void rejectsRetryOfMissingDelivery() throws Exception {
+        assertEquals(404, send("POST", "/api/v1/deliveries/999999/retry", null).statusCode());
+        assertEquals(0, deliveryRepository.count());
+        assertNull(receivedPayload.get());
+    }
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));

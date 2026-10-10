@@ -49,6 +49,14 @@ public class DeliveryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery not found"));
     }
 
+    public int retry(Long id) {
+        Delivery delivery = findById(id);
+        if (delivery.getStatus() != DeliveryStatus.FAILED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only failed deliveries can be retried");
+        }
+        return send(delivery.getEventId(), delivery.getEndpointId());
+    }
+
     public int send(Long eventId, Long endpointId) {
         if (eventId == null || eventId <= 0 || endpointId == null || endpointId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event and endpoint IDs must be positive");
