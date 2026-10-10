@@ -17,6 +17,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -303,6 +305,41 @@ class DeliveryIntegrationTest {
         assertEquals(404, send("POST", "/api/v1/deliveries/999999/retry", null).statusCode());
         assertEquals(0, deliveryRepository.count());
         assertNull(receivedPayload.get());
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"plain text", "{", "{} {}", "{\"orderId\":1} extra"})
+    void rejectsMalformedEventJsonBeforeSaving(String payload) throws Exception {
+        HttpResponse<String> response = send("POST", "/api/v1/events",
+                Map.of("type", "order.created", "payload", payload));
+
+        assertEquals(400, response.statusCode());
+        assertEquals(0, eventRepository.count());
+        assertEquals(0, deliveryRepository.count());
+        assertNull(receivedPayload.get());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"orderId\":123}", "[1,2,3]", " \n {\"message\":\"Привет\"} \n "})
+    void acceptsValidJsonWithoutChangingPayload(String payload) throws Exception {
+        long eventId = createEvent(payload);
+
+        assertEquals(payload, eventRepository.findById(eventId).orElseThrow().getPayload());
+        HttpResponse<String> response = send("GET", "/api/v1/events/" + eventId, null);
+        assertEquals(200, response.statusCode());
+        assertEquals(payload, jsonMapper.readTree(response.body()).get("payload").asText());
+    }
+
+    @Test
+    void enforcesEventTypeLengthBeforeSaving() throws Exception {
+        HttpResponse<String> tooLong = send("POST", "/api/v1/events",
+                Map.of("type", "a".repeat(256), "payload", "{}"));
+        assertEquals(400, tooLong.statusCode());
+        assertEquals(0, eventRepository.count());
+
+        HttpResponse<String> allowed = send("POST", "/api/v1/events",
+                Map.of("type", "a".repeat(255), "payload", "{}"));
+        assertEquals(201, allowed.statusCode());
+        assertEquals(1, eventRepository.count());
     }
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
