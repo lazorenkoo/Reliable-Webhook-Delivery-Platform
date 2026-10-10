@@ -177,6 +177,43 @@ class DeliveryIntegrationTest {
         assertEquals(0, deliveryRepository.count());
     }
 
+    @Test
+    void filtersHistoryByStatus() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        Map<String, Long> request = Map.of("eventId", eventId, "endpointId", endpointId);
+        assertEquals(200, send("POST", "/api/v1/deliveries", request).statusCode());
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries", request).statusCode());
+
+        HttpResponse<String> failed = send("GET", "/api/v1/deliveries?status=FAILED", null);
+        assertEquals(200, failed.statusCode());
+        JsonNode failedBody = jsonMapper.readTree(failed.body());
+        assertEquals(1, failedBody.size());
+        assertEquals("FAILED", failedBody.get(0).get("status").asText());
+        assertEquals(500, failedBody.get(0).get("httpStatus").asInt());
+
+        HttpResponse<String> succeeded = send("GET", "/api/v1/deliveries?status=SUCCEEDED", null);
+        assertEquals(200, succeeded.statusCode());
+        JsonNode succeededBody = jsonMapper.readTree(succeeded.body());
+        assertEquals(1, succeededBody.size());
+        assertEquals("SUCCEEDED", succeededBody.get(0).get("status").asText());
+
+        HttpResponse<String> all = send("GET", "/api/v1/deliveries", null);
+        assertEquals(200, all.statusCode());
+        assertEquals(2, jsonMapper.readTree(all.body()).size());
+        HttpResponse<String> pending = send("GET", "/api/v1/deliveries?status=PENDING", null);
+        assertEquals(200, pending.statusCode());
+        assertEquals(0, jsonMapper.readTree(pending.body()).size());
+    }
+
+    @Test
+    void rejectsUnknownDeliveryStatus() throws Exception {
+        HttpResponse<String> response = send("GET", "/api/v1/deliveries?status=UNKNOWN", null);
+
+        assertEquals(400, response.statusCode());
+        assertEquals(0, deliveryRepository.count());
+    }
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));

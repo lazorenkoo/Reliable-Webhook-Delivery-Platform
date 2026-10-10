@@ -28,7 +28,10 @@ public class DeliveryService {
         this.deliveryRepository = deliveryRepository;
     }
 
-    public List<Delivery> findAll() {
+    public List<Delivery> findAll(DeliveryStatus status) {
+        if (status != null) {
+            return deliveryRepository.findByStatus(status);
+        }
         return deliveryRepository.findAll();
     }
 
