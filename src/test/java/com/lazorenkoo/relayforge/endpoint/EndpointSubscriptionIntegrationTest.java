@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.lazorenkoo.relayforge.delivery.Delivery;
 import com.lazorenkoo.relayforge.delivery.DeliveryRepository;
+import com.lazorenkoo.relayforge.delivery.DeliveryStatus;
 import com.lazorenkoo.relayforge.event.EventRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -162,6 +164,58 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals(1, endpoints.size());
         assertEquals(matchingId, endpoints.getFirst().getId());
         assertTrue(endpointRepository.findSubscribedEndpoints("order.paid").isEmpty());
+    }
+    @Test
+    void createsPendingDeliveriesForMatchingEnabledEndpoints() throws Exception {
+        long firstId = createEndpoint();
+        long secondId = createEndpoint();
+        long disabledId = createEndpoint();
+        assertEquals(200, send("PATCH", "/api/v1/endpoints/" + disabledId + "/disable", null).statusCode());
+        assertEquals(201, send("POST", "/api/v1/endpoints", Map.of(
+                "url", "https://example.com/other", "subscribedEvents", List.of("user.created"))).statusCode());
+        assertEquals(201, send("POST", "/api/v1/endpoints",
+                Map.of("url", "https://example.com/no-subscriptions")).statusCode());
+
+        HttpResponse<String> response = send("POST", "/api/v1/events",
+                Map.of("type", "order.created", "payload", "{}"));
+
+        assertEquals(201, response.statusCode());
+        long eventId = jsonMapper.readTree(response.body()).get("id").asLong();
+        List<Delivery> deliveries = deliveryRepository.findByEventId(eventId);
+        assertEquals(2, deliveries.size());
+        Set<Long> endpointIds = new java.util.HashSet<>();
+        for (Delivery delivery : deliveries) {
+            endpointIds.add(delivery.getEndpointId());
+            assertEquals(DeliveryStatus.PENDING, delivery.getStatus());
+            assertNotNull(delivery.getCreatedAt());
+            assertNull(delivery.getCompletedAt());
+            assertNull(delivery.getHttpStatus());
+        }
+        assertEquals(Set.of(firstId, secondId), endpointIds);
+    }
+
+    @Test
+    void savesEventWithoutDeliveriesWhenThereAreNoMatchingSubscriptions() throws Exception {
+        createEndpoint();
+
+        HttpResponse<String> response = send("POST", "/api/v1/events",
+                Map.of("type", "user.created", "payload", "{}"));
+
+        assertEquals(201, response.statusCode());
+        assertEquals(1, eventRepository.count());
+        assertEquals(0, deliveryRepository.count());
+    }
+
+    @Test
+    void rejectsInvalidEventWithoutCreatingDeliveriesForSubscribers() throws Exception {
+        createEndpoint();
+
+        HttpResponse<String> response = send("POST", "/api/v1/events",
+                Map.of("type", "order.created", "payload", "broken json"));
+
+        assertEquals(400, response.statusCode());
+        assertEquals(0, eventRepository.count());
+        assertEquals(0, deliveryRepository.count());
     }
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
