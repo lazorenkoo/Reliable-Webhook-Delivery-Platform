@@ -146,6 +146,23 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals(0, endpointRepository.count());
     }
 
+    @Test
+    void findsOnlyEnabledEndpointsSubscribedToEventType() throws Exception {
+        long matchingId = createEndpoint();
+        HttpResponse<String> other = send("POST", "/api/v1/endpoints", Map.of(
+                "url", "https://example.com/other", "subscribedEvents", List.of("user.created")));
+        assertEquals(201, other.statusCode());
+        long disabledId = createEndpoint();
+        assertEquals(200, send("PATCH", "/api/v1/endpoints/" + disabledId + "/disable", null).statusCode());
+        assertEquals(201, send("POST", "/api/v1/endpoints",
+                Map.of("url", "https://example.com/no-subscriptions")).statusCode());
+
+        List<WebhookEndpoint> endpoints = endpointRepository.findSubscribedEndpoints("order.created");
+
+        assertEquals(1, endpoints.size());
+        assertEquals(matchingId, endpoints.getFirst().getId());
+        assertTrue(endpointRepository.findSubscribedEndpoints("order.paid").isEmpty());
+    }
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
                 "url", "https://example.com/webhook", "subscribedEvents", List.of("order.created")));
