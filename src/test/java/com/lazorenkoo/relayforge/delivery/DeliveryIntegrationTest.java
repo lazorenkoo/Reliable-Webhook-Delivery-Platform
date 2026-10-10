@@ -214,6 +214,46 @@ class DeliveryIntegrationTest {
         assertEquals(400, response.statusCode());
         assertEquals(0, deliveryRepository.count());
     }
+    @Test
+    void filtersDeliveriesByEventAndStatus() throws Exception {
+        long endpointId = createEndpoint();
+        long firstEventId = createEvent("{\"orderId\":1}");
+        long secondEventId = createEvent("{\"orderId\":2}");
+        Map<String, Long> firstRequest = Map.of("eventId", firstEventId, "endpointId", endpointId);
+        assertEquals(200, send("POST", "/api/v1/deliveries", firstRequest).statusCode());
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries", firstRequest).statusCode());
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", secondEventId, "endpointId", endpointId)).statusCode());
+
+        HttpResponse<String> eventHistory = send("GET", "/api/v1/deliveries?eventId=" + firstEventId, null);
+        assertEquals(200, eventHistory.statusCode());
+        JsonNode historyBody = jsonMapper.readTree(eventHistory.body());
+        assertEquals(2, historyBody.size());
+        for (JsonNode delivery : historyBody) {
+            assertEquals(firstEventId, delivery.get("eventId").asLong());
+        }
+
+        HttpResponse<String> failed = send("GET",
+                "/api/v1/deliveries?eventId=" + firstEventId + "&status=FAILED", null);
+        assertEquals(200, failed.statusCode());
+        JsonNode failedBody = jsonMapper.readTree(failed.body());
+        assertEquals(1, failedBody.size());
+        assertEquals(firstEventId, failedBody.get(0).get("eventId").asLong());
+        assertEquals("FAILED", failedBody.get(0).get("status").asText());
+
+        HttpResponse<String> empty = send("GET", "/api/v1/deliveries?eventId=999999", null);
+        assertEquals(200, empty.statusCode());
+        assertEquals(0, jsonMapper.readTree(empty.body()).size());
+    }
+
+    @Test
+    void rejectsInvalidEventFilter() throws Exception {
+        assertEquals(400, send("GET", "/api/v1/deliveries?eventId=0", null).statusCode());
+        assertEquals(400, send("GET", "/api/v1/deliveries?eventId=-1", null).statusCode());
+        assertEquals(400, send("GET", "/api/v1/deliveries?eventId=abc", null).statusCode());
+        assertEquals(0, deliveryRepository.count());
+    }
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));

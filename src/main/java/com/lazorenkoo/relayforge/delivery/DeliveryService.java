@@ -28,7 +28,16 @@ public class DeliveryService {
         this.deliveryRepository = deliveryRepository;
     }
 
-    public List<Delivery> findAll(DeliveryStatus status) {
+    public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
+        if (eventId != null) {
+            if (eventId <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event ID must be positive");
+            }
+            if (status != null) {
+                return deliveryRepository.findByEventIdAndStatus(eventId, status);
+            }
+            return deliveryRepository.findByEventId(eventId);
+        }
         if (status != null) {
             return deliveryRepository.findByStatus(status);
         }

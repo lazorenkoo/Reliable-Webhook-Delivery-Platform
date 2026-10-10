@@ -21,8 +21,9 @@ public class DeliveryController {
     }
 
     @GetMapping
-    public List<Delivery> findAll(@RequestParam(required = false) DeliveryStatus status) {
-        return deliveryService.findAll(status);
+    public List<Delivery> findAll(@RequestParam(required = false) DeliveryStatus status,
+                                  @RequestParam(required = false) Long eventId) {
+        return deliveryService.findAll(status, eventId);
     }
 
     @GetMapping("/{id}")
