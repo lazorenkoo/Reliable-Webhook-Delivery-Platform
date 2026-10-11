@@ -6,10 +6,18 @@ import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
     List<Delivery> findByStatus(DeliveryStatus status);
+
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Delivery delivery set delivery.status = :processing "
+            + "where delivery.id = :id and delivery.status = :expected")
+    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing);
 
     @Query("select delivery from Delivery delivery, WebhookEndpoint endpoint "
             + "where delivery.endpointId = endpoint.id and endpoint.enabled = true "
