@@ -682,6 +682,59 @@ class DeliveryIntegrationTest {
         });
     }
 
+    @Test
+    void recoversExpiredProcessingAndRejectsOldResult() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        Delivery delivery = new Delivery();
+        delivery.setEndpointId(endpointId);
+        delivery.setEventId(eventId);
+        delivery = deliveryRepository.save(delivery);
+        long id = delivery.getId();
+        new DeliveryClaimService(deliveryRepository).claim(delivery, DeliveryStatus.PENDING);
+        Delivery oldResult = delivery;
+        Delivery fresh = new Delivery();
+        fresh = deliveryRepository.save(fresh);
+        new DeliveryClaimService(deliveryRepository).claim(fresh, DeliveryStatus.PENDING);
+        jdbcTemplate.update("UPDATE deliveries SET processing_started_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(120)), id);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
+
+        worker.sendPendingDeliveries();
+
+        Delivery recovered = deliveryRepository.findById(id).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, recovered.getStatus());
+        assertEquals(1, recovered.getAttemptCount());
+        assertNotNull(recovered.getNextAttemptAt());
+        assertNull(recovered.getProcessingStartedAt());
+        assertEquals(DeliveryStatus.PROCESSING, deliveryRepository.findById(fresh.getId()).orElseThrow().getStatus());
+        resultService.recover(id, Instant.now());
+        assertEquals(1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+
+        recovered.setNextAttemptAt(Instant.now().minusSeconds(1));
+        deliveryRepository.save(recovered);
+        Delivery current = deliveryRepository.findById(id).orElseThrow();
+        new DeliveryClaimService(deliveryRepository).claimRetry(current);
+        oldResult.setStatus(DeliveryStatus.SUCCEEDED);
+        oldResult.setAttemptCount(1);
+        oldResult.setCompletedAt(Instant.now());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> resultService.save(oldResult)).getStatusCode().value());
+        assertEquals(current.getProcessingVersion(), deliveryRepository.findById(id).orElseThrow().getProcessingVersion());
+        assertEquals(1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+
+        jdbcTemplate.update("UPDATE deliveries SET processing_started_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(120)), id);
+        worker.sendPendingDeliveries();
+        Delivery ready = deliveryRepository.findById(id).orElseThrow();
+        ready.setNextAttemptAt(Instant.now().minusSeconds(1));
+        deliveryRepository.save(ready);
+        worker.sendPendingDeliveries();
+        assertEquals("{}", receivedPayload.get());
+        assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(id).orElseThrow().getStatus());
+        assertEquals(3, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+    }
+
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));
