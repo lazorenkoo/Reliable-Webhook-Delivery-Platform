@@ -40,7 +40,7 @@ public class EventService {
     }
 
     @Transactional
-    public Event create(String type, String payload) {
+    public Event create(String type, String payload, String idempotencyKey) {
         if (type == null || type.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event type is required");
         }
@@ -62,6 +62,7 @@ public class EventService {
         Event event = new Event();
         event.setType(type);
         event.setPayload(payload);
+        event.setIdempotencyKey(idempotencyKey);
         Event savedEvent = eventRepository.save(event);
 
         List<WebhookEndpoint> endpoints = endpointRepository.findSubscribedEndpoints(type);
