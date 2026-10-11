@@ -8,6 +8,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 
 public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
@@ -15,19 +18,27 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Delivery delivery set delivery.status = :processing "
+    @Query("update Delivery delivery set delivery.status = :processing, delivery.processingStartedAt = :now, "
+            + "delivery.processingVersion = :version + 1 "
             + "where delivery.id = :id and delivery.status = :expected "
-            + "and coalesce(delivery.attemptCount, 0) = :attempts")
-    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing, int attempts);
+            + "and coalesce(delivery.attemptCount, 0) = :attempts "
+            + "and coalesce(delivery.processingVersion, 0) = :version")
+    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing, int attempts, long version, Instant now);
 
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Delivery delivery set delivery.status = :processing "
+    @Query("update Delivery delivery set delivery.status = :processing, delivery.processingStartedAt = :now, "
+            + "delivery.processingVersion = :version + 1 "
             + "where delivery.id = :id and delivery.status = :failed "
             + "and delivery.nextAttemptAt = :scheduledAt and delivery.nextAttemptAt <= :now "
-            + "and delivery.attemptCount = :attempts and delivery.attemptCount < 3")
+            + "and delivery.attemptCount = :attempts and delivery.attemptCount < 3 "
+            + "and coalesce(delivery.processingVersion, 0) = :version")
     int claimRetry(Long id, DeliveryStatus failed, DeliveryStatus processing,
-                   Instant scheduledAt, Instant now, int attempts);
+                   Instant scheduledAt, Instant now, int attempts, long version);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select delivery from Delivery delivery where delivery.id = :id")
+    Optional<Delivery> findForUpdate(Long id);
 
     @Query("select delivery from Delivery delivery, WebhookEndpoint endpoint "
             + "where delivery.endpointId = endpoint.id and endpoint.enabled = true "

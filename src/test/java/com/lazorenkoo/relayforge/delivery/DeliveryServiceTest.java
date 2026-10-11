@@ -35,13 +35,19 @@ class DeliveryServiceTest {
         deliveryRepository = mock(DeliveryRepository.class);
         DeliveryAttemptRepository attemptRepository = mock(DeliveryAttemptRepository.class);
         DeliveryResultService resultService = new DeliveryResultService(deliveryRepository, attemptRepository);
-        when(deliveryRepository.claim(any(), any(), any(), anyInt())).thenReturn(1);
+        when(deliveryRepository.claim(any(), any(), any(), anyInt(), anyLong(), any())).thenReturn(1);
         deliveryService = new DeliveryService(eventService, endpointService, webhookSender, deliveryRepository,
                 attemptRepository, resultService, new DeliveryClaimService(deliveryRepository));
         savedStatuses = new ArrayList<>();
     }
 
     private void prepareDelivery(boolean enabled) {
+        when(deliveryRepository.findForUpdate(any())).thenAnswer(invocation -> {
+            Delivery current = new Delivery();
+            current.setStatus(DeliveryStatus.PROCESSING);
+            current.setProcessingVersion(1);
+            return Optional.of(current);
+        });
         Event event = new Event();
         event.setPayload("{\"orderId\":123}");
         WebhookEndpoint endpoint = new WebhookEndpoint();

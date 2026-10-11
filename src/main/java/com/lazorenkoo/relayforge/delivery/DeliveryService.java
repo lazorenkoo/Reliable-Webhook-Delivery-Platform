@@ -67,8 +67,7 @@ public class DeliveryService {
         try {
             return send(delivery.getEventId(), delivery.getEndpointId());
         } finally {
-            delivery.setStatus(DeliveryStatus.FAILED);
-            deliveryRepository.save(delivery);
+            resultService.finishManualRetry(delivery);
         }
     }
 

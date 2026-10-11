@@ -490,6 +490,7 @@ class DeliveryIntegrationTest {
     void rollsBackDeliveryWhenAttemptCannotBeSaved() {
         Delivery delivery = deliveryRepository.save(new Delivery());
         long id = delivery.getId();
+        new DeliveryClaimService(deliveryRepository).claim(delivery, DeliveryStatus.PENDING);
         delivery.setStatus(DeliveryStatus.SUCCEEDED);
         delivery.setAttemptCount(1);
         delivery.setHttpStatus(200);
@@ -500,7 +501,7 @@ class DeliveryIntegrationTest {
             assertThrows(DataIntegrityViolationException.class, () -> resultService.save(delivery));
 
             Delivery saved = deliveryRepository.findById(id).orElseThrow();
-            assertEquals(DeliveryStatus.PENDING, saved.getStatus());
+            assertEquals(DeliveryStatus.PROCESSING, saved.getStatus());
             assertEquals(0, saved.getAttemptCount());
             assertNull(saved.getHttpStatus());
             assertNull(saved.getCompletedAt());
