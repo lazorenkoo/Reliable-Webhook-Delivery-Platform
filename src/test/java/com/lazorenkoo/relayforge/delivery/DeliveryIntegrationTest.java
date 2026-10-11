@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -592,6 +593,48 @@ class DeliveryIntegrationTest {
         assertEquals(1, requests.get());
         assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(id).orElseThrow().getStatus());
         assertEquals(1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DeliveryStatus.class, names = {"PENDING", "FAILED"})
+    void onlyOneServiceClaimsTheSameSnapshot(DeliveryStatus status) throws Exception {
+        Delivery delivery = new Delivery();
+        delivery.setStatus(status);
+        long id = deliveryRepository.save(delivery).getId();
+        Delivery firstSnapshot = deliveryRepository.findById(id).orElseThrow();
+        Delivery secondSnapshot = deliveryRepository.findById(id).orElseThrow();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        java.util.List<java.util.concurrent.Future<Integer>> results = new java.util.ArrayList<>();
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            for (Delivery snapshot : java.util.List.of(firstSnapshot, secondSnapshot)) {
+                DeliveryClaimService service = new DeliveryClaimService(deliveryRepository);
+                results.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Claim start timed out");
+                    }
+                    try {
+                        service.claim(snapshot, status);
+                        return 200;
+                    } catch (ResponseStatusException exception) {
+                        return exception.getStatusCode().value();
+                    }
+                }));
+            }
+            try {
+                assertTrue(ready.await(5, TimeUnit.SECONDS));
+            } finally {
+                start.countDown();
+            }
+            java.util.Set<Integer> statuses = java.util.Set.of(
+                    results.get(0).get(5, TimeUnit.SECONDS), results.get(1).get(5, TimeUnit.SECONDS));
+            assertEquals(java.util.Set.of(200, 409), statuses);
+        }
+
+        assertEquals(DeliveryStatus.PROCESSING, deliveryRepository.findById(id).orElseThrow().getStatus());
+        assertEquals(0, deliveryRepository.findById(id).orElseThrow().getAttemptCount());
     }
 
     private long createEndpoint() throws Exception {
