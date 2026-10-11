@@ -506,6 +506,47 @@ class DeliveryIntegrationTest {
         }
     }
 
+    @Test
+    void workerStopsAfterThreeFailedAttempts() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        long id = deliveryRepository.findAll().getFirst().getId();
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+
+        for (int attempt = 2; attempt <= 3; attempt++) {
+            Delivery delivery = deliveryRepository.findById(id).orElseThrow();
+            assertNotNull(delivery.getNextAttemptAt());
+            delivery.setNextAttemptAt(Instant.now().minusSeconds(1));
+            deliveryRepository.save(delivery);
+            worker.sendPendingDeliveries();
+            assertEquals(attempt, deliveryRepository.findById(id).orElseThrow().getAttemptCount());
+        }
+
+        Delivery exhausted = deliveryRepository.findById(id).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, exhausted.getStatus());
+        assertNull(exhausted.getNextAttemptAt());
+        receivedPayload.set(null);
+        worker.sendPendingDeliveries();
+        assertNull(receivedPayload.get());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> deliveryService.sendScheduledRetry(id)).getStatusCode().value());
+
+        java.util.List<DeliveryAttempt> attempts = attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id);
+        assertEquals(3, attempts.size());
+        for (int index = 0; index < attempts.size(); index++) {
+            DeliveryAttempt attempt = attempts.get(index);
+            assertEquals(index + 1, attempt.getAttemptNumber());
+            assertEquals(DeliveryStatus.FAILED, attempt.getStatus());
+            assertEquals(500, attempt.getHttpStatus());
+            assertEquals("Receiver returned HTTP 500", attempt.getError());
+            assertNotNull(attempt.getCompletedAt());
+        }
+        assertEquals(1, deliveryRepository.count());
+    }
+
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));
