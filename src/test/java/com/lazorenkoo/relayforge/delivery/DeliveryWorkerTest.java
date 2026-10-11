@@ -13,7 +13,7 @@ class DeliveryWorkerTest {
 
     private final DeliveryRepository repository = mock(DeliveryRepository.class);
     private final DeliveryService service = mock(DeliveryService.class);
-    private final DeliveryWorker worker = new DeliveryWorker(repository, service);
+    private final DeliveryWorker worker = new DeliveryWorker(repository, service, mock(DeliveryResultService.class));
 
     private Delivery delivery(Long id) {
         Delivery delivery = mock(Delivery.class);

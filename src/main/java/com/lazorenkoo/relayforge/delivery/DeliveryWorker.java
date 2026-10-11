@@ -19,14 +19,22 @@ public class DeliveryWorker {
     private static final Logger logger = LoggerFactory.getLogger(DeliveryWorker.class);
     private final DeliveryRepository deliveryRepository;
     private final DeliveryService deliveryService;
+    private final DeliveryResultService resultService;
 
-    public DeliveryWorker(DeliveryRepository deliveryRepository, DeliveryService deliveryService) {
+    public DeliveryWorker(DeliveryRepository deliveryRepository, DeliveryService deliveryService,
+                          DeliveryResultService resultService) {
         this.deliveryRepository = deliveryRepository;
         this.deliveryService = deliveryService;
+        this.resultService = resultService;
     }
 
     @Scheduled(fixedDelayString = "${relayforge.worker.delay:5000}")
     public void sendPendingDeliveries() {
+        Instant cutoff = Instant.now().minusSeconds(60);
+        for (Delivery delivery : deliveryRepository.findExpiredProcessing(
+                DeliveryStatus.PROCESSING, cutoff, PageRequest.of(0, 20))) {
+            resultService.recover(delivery.getId(), cutoff);
+        }
         for (Delivery delivery : deliveryRepository.findReadyDeliveries(
                 DeliveryStatus.PENDING, PageRequest.of(0, 20))) {
             if (Thread.currentThread().isInterrupted()) {

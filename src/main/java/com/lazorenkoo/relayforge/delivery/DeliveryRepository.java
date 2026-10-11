@@ -19,16 +19,17 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Delivery delivery set delivery.status = :processing, delivery.processingStartedAt = :now, "
-            + "delivery.processingVersion = :version + 1 "
+            + "delivery.processingVersion = :version + 1, delivery.manualRetryProcessing = :manual "
             + "where delivery.id = :id and delivery.status = :expected "
             + "and coalesce(delivery.attemptCount, 0) = :attempts "
             + "and coalesce(delivery.processingVersion, 0) = :version")
-    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing, int attempts, long version, Instant now);
+    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing, int attempts, long version,
+              Instant now, boolean manual);
 
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Delivery delivery set delivery.status = :processing, delivery.processingStartedAt = :now, "
-            + "delivery.processingVersion = :version + 1 "
+            + "delivery.processingVersion = :version + 1, delivery.manualRetryProcessing = false "
             + "where delivery.id = :id and delivery.status = :failed "
             + "and delivery.nextAttemptAt = :scheduledAt and delivery.nextAttemptAt <= :now "
             + "and delivery.attemptCount = :attempts and delivery.attemptCount < 3 "
@@ -39,6 +40,11 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select delivery from Delivery delivery where delivery.id = :id")
     Optional<Delivery> findForUpdate(Long id);
+
+    @Query("select delivery from Delivery delivery where delivery.status = :status "
+            + "and (delivery.processingStartedAt <= :cutoff or delivery.processingStartedAt is null) "
+            + "order by delivery.id")
+    List<Delivery> findExpiredProcessing(DeliveryStatus status, Instant cutoff, Pageable pageable);
 
     @Query("select delivery from Delivery delivery, WebhookEndpoint endpoint "
             + "where delivery.endpointId = endpoint.id and endpoint.enabled = true "

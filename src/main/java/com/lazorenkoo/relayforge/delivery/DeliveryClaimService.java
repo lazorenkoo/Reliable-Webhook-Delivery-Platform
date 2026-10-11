@@ -20,12 +20,14 @@ public class DeliveryClaimService {
         }
         Instant now = Instant.now();
         if (repository.claim(delivery.getId(), expected, DeliveryStatus.PROCESSING,
-                delivery.getAttemptCount(), delivery.getProcessingVersion(), now) != 1) {
+                delivery.getAttemptCount(), delivery.getProcessingVersion(), now,
+                expected == DeliveryStatus.FAILED) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is already being processed or completed");
         }
         delivery.setStatus(DeliveryStatus.PROCESSING);
         delivery.setProcessingVersion(delivery.getProcessingVersion() + 1);
         delivery.setProcessingStartedAt(now);
+        delivery.setManualRetryProcessing(expected == DeliveryStatus.FAILED);
     }
 
     public void claimRetry(Delivery delivery) {
@@ -37,5 +39,6 @@ public class DeliveryClaimService {
         delivery.setStatus(DeliveryStatus.PROCESSING);
         delivery.setProcessingVersion(delivery.getProcessingVersion() + 1);
         delivery.setProcessingStartedAt(now);
+        delivery.setManualRetryProcessing(false);
     }
 }

@@ -383,7 +383,7 @@ class DeliveryIntegrationTest {
         long eventId = createEvent(payload);
         Delivery pending = deliveryRepository.findByEventId(eventId).getFirst();
         assertEquals(DeliveryStatus.PENDING, pending.getStatus());
-        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
 
         assertEquals(200, send("PATCH", "/api/v1/endpoints/" + endpointId + "/disable", null).statusCode());
         worker.sendPendingDeliveries();
@@ -420,7 +420,7 @@ class DeliveryIntegrationTest {
         assertNotNull(original.getNextAttemptAt());
         original.setNextAttemptAt(Instant.now().plusSeconds(3600));
         deliveryRepository.save(original);
-        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
         receiverStatus.set(200);
         receivedPayload.set(null);
 
@@ -482,7 +482,7 @@ class DeliveryIntegrationTest {
         assertNull(previous.getNextAttemptAt());
         assertEquals(2, deliveryRepository.count());
         receivedPayload.set(null);
-        new DeliveryWorker(deliveryRepository, deliveryService).sendPendingDeliveries();
+        new DeliveryWorker(deliveryRepository, deliveryService, resultService).sendPendingDeliveries();
         assertNull(receivedPayload.get());
     }
 
@@ -519,7 +519,7 @@ class DeliveryIntegrationTest {
         assertEquals(200, send("POST", "/api/v1/deliveries",
                 Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
         long id = deliveryRepository.findAll().getFirst().getId();
-        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
 
         for (int attempt = 2; attempt <= 3; attempt++) {
             Delivery delivery = deliveryRepository.findById(id).orElseThrow();

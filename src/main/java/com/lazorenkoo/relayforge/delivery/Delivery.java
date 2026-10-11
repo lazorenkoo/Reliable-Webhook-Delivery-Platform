@@ -29,6 +29,15 @@ public class Delivery {
     private Instant nextAttemptAt;
     private Instant processingStartedAt;
     private Long processingVersion = 0L;
+    private Boolean manualRetryProcessing = false;
+
+    public boolean isManualRetryProcessing() {
+        return Boolean.TRUE.equals(manualRetryProcessing);
+    }
+
+    public void setManualRetryProcessing(boolean manualRetryProcessing) {
+        this.manualRetryProcessing = manualRetryProcessing;
+    }
 
     @Column(columnDefinition = "text")
     private String lastError;
