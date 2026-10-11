@@ -1,5 +1,7 @@
 package com.lazorenkoo.relayforge.delivery;
 
+import java.time.Instant;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,6 +36,17 @@ public class DeliveryWorker {
                 deliveryService.sendPending(delivery.getId());
             } catch (ResponseStatusException exception) {
                 logger.warn("Delivery {} could not be sent: {}", delivery.getId(), exception.getReason());
+            }
+        }
+        for (Delivery delivery : deliveryRepository.findDueRetries(
+                DeliveryStatus.FAILED, Instant.now(), PageRequest.of(0, 20))) {
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+            try {
+                deliveryService.sendScheduledRetry(delivery.getId());
+            } catch (ResponseStatusException exception) {
+                logger.warn("Delivery {} retry failed: {}", delivery.getId(), exception.getReason());
             }
         }
     }

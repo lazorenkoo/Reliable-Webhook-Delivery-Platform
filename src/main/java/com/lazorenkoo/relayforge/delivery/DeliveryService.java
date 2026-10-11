@@ -54,7 +54,23 @@ public class DeliveryService {
         if (delivery.getStatus() != DeliveryStatus.FAILED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only failed deliveries can be retried");
         }
+        delivery.setNextAttemptAt(null);
+        deliveryRepository.save(delivery);
         return send(delivery.getEventId(), delivery.getEndpointId());
+    }
+
+    public int sendScheduledRetry(Long id) {
+        Delivery delivery = findById(id);
+        if (delivery.getStatus() != DeliveryStatus.FAILED || delivery.getNextAttemptAt() == null
+                || delivery.getNextAttemptAt().isAfter(Instant.now()) || delivery.getAttemptCount() >= 3) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery is not ready for retry");
+        }
+        Event event = eventService.findById(delivery.getEventId());
+        WebhookEndpoint endpoint = endpointService.findById(delivery.getEndpointId());
+        if (!endpoint.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
+        }
+        return sendDelivery(delivery, event, endpoint);
     }
 
     public int send(Long eventId, Long endpointId) {
