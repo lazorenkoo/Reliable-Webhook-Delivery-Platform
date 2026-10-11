@@ -7,6 +7,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,6 +23,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -376,6 +378,65 @@ class DeliveryIntegrationTest {
         worker.sendPendingDeliveries();
         assertNull(receivedPayload.get());
         assertEquals(1, deliveryRepository.count());
+    }
+
+    @Test
+    void workerWaitsForRetryTimeAndUpdatesOriginalDelivery() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{\"orderId\":123}");
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        Delivery original = deliveryRepository.findAll().getFirst();
+        assertEquals(1, original.getAttemptCount());
+        assertNotNull(original.getNextAttemptAt());
+        original.setNextAttemptAt(Instant.now().plusSeconds(3600));
+        deliveryRepository.save(original);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+        receiverStatus.set(200);
+        receivedPayload.set(null);
+
+        worker.sendPendingDeliveries();
+        assertNull(receivedPayload.get());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> deliveryService.sendScheduledRetry(original.getId())).getStatusCode().value());
+
+        original.setNextAttemptAt(Instant.now().minusSeconds(1));
+        deliveryRepository.save(original);
+        worker.sendPendingDeliveries();
+
+        Delivery retried = deliveryRepository.findById(original.getId()).orElseThrow();
+        assertEquals("{\"orderId\":123}", receivedPayload.get());
+        assertEquals(DeliveryStatus.SUCCEEDED, retried.getStatus());
+        assertEquals(2, retried.getAttemptCount());
+        assertEquals(200, retried.getHttpStatus());
+        assertNull(retried.getNextAttemptAt());
+        assertNull(retried.getLastError());
+        assertEquals(1, deliveryRepository.count());
+    }
+
+    @Test
+    void manualRetryCancelsScheduledRetryOfOriginalRecord() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        Delivery original = deliveryRepository.findAll().getFirst();
+        assertNotNull(original.getNextAttemptAt());
+        original.setNextAttemptAt(Instant.now().minusSeconds(1));
+        deliveryRepository.save(original);
+        receiverStatus.set(200);
+
+        assertEquals(200, send("POST", "/api/v1/deliveries/" + original.getId() + "/retry", null).statusCode());
+
+        Delivery previous = deliveryRepository.findById(original.getId()).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, previous.getStatus());
+        assertNull(previous.getNextAttemptAt());
+        assertEquals(2, deliveryRepository.count());
+        receivedPayload.set(null);
+        new DeliveryWorker(deliveryRepository, deliveryService).sendPendingDeliveries();
+        assertNull(receivedPayload.get());
     }
 
     private long createEndpoint() throws Exception {
