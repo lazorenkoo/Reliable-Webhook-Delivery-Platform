@@ -248,6 +248,40 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals(0, deliveryRepository.count());
     }
 
+    @Test
+    void concurrentRequestsCreateOneEventAndDelivery() throws Exception {
+        createEndpoint();
+        String key = "a".repeat(255);
+        Map<String, String> body = Map.of("type", "order.created", "payload", "{}");
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        java.util.List<java.util.concurrent.Future<HttpResponse<String>>> responses = new java.util.ArrayList<>();
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            for (int index = 0; index < 2; index++) {
+                responses.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Request start timed out");
+                    }
+                    return sendEvent(key, body);
+                }));
+            }
+            try {
+                assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            } finally {
+                start.countDown();
+            }
+            HttpResponse<String> first = responses.get(0).get(20, java.util.concurrent.TimeUnit.SECONDS);
+            HttpResponse<String> second = responses.get(1).get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(201, first.statusCode());
+            assertEquals(201, second.statusCode());
+            assertEquals(jsonMapper.readTree(first.body()).get("id").asLong(),
+                    jsonMapper.readTree(second.body()).get("id").asLong());
+        }
+        assertEquals(1, eventRepository.count());
+        assertEquals(1, deliveryRepository.count());
+    }
+
     private HttpResponse<String> sendEvent(String key, Object body) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/events"))
