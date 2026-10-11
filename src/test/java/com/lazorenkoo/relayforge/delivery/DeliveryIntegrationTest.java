@@ -9,6 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -545,6 +548,50 @@ class DeliveryIntegrationTest {
             assertNotNull(attempt.getCompletedAt());
         }
         assertEquals(1, deliveryRepository.count());
+    }
+
+    @Test
+    void preventsConcurrentSendingOfPendingDelivery() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        Delivery delivery = new Delivery();
+        delivery.setEventId(eventId);
+        delivery.setEndpointId(endpointId);
+        long id = deliveryRepository.save(delivery).getId();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger requests = new AtomicInteger();
+        receiver.removeContext("/webhook");
+        receiver.createContext("/webhook", exchange -> {
+            try (exchange) {
+                exchange.getRequestBody().readAllBytes();
+                requests.incrementAndGet();
+                entered.countDown();
+                if (release.await(5, TimeUnit.SECONDS)) {
+                    exchange.sendResponseHeaders(200, -1);
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> deliveryService.sendPending(id));
+            try {
+                assertTrue(entered.await(5, TimeUnit.SECONDS));
+                assertEquals(DeliveryStatus.PROCESSING, deliveryRepository.findById(id).orElseThrow().getStatus());
+                var second = executor.submit(() -> assertThrows(ResponseStatusException.class,
+                        () -> deliveryService.sendPending(id)));
+                assertEquals(409, second.get(3, TimeUnit.SECONDS).getStatusCode().value());
+            } finally {
+                release.countDown();
+            }
+            assertEquals(200, first.get(5, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, requests.get());
+        assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(id).orElseThrow().getStatus());
+        assertEquals(1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
     }
 
     private long createEndpoint() throws Exception {
