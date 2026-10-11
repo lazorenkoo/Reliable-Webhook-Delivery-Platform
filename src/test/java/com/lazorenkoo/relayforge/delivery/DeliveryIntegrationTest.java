@@ -735,6 +735,52 @@ class DeliveryIntegrationTest {
         assertEquals(3, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void recoveryStopsExpiredManualOrExhaustedProcessing(boolean manual) throws Exception {
+        Delivery delivery = new Delivery();
+        delivery.setStatus(DeliveryStatus.FAILED);
+        delivery.setAttemptCount(manual ? 1 : 2);
+        delivery.setHttpStatus(500);
+        delivery.setLastError("Receiver returned HTTP 500");
+        delivery.setCompletedAt(Instant.now());
+        delivery.setNextAttemptAt(Instant.now().minusSeconds(1));
+        delivery = deliveryRepository.save(delivery);
+        long id = delivery.getId();
+        DeliveryClaimService claimService = new DeliveryClaimService(deliveryRepository);
+        if (manual) {
+            claimService.claim(delivery, DeliveryStatus.FAILED);
+        } else {
+            claimService.claimRetry(delivery);
+        }
+        Delivery oldOwner = delivery;
+        jdbcTemplate.update("UPDATE deliveries SET processing_started_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(120)), id);
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
+
+        worker.sendPendingDeliveries();
+        worker.sendPendingDeliveries();
+
+        Delivery recovered = deliveryRepository.findById(id).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, recovered.getStatus());
+        assertEquals(manual ? 1 : 3, recovered.getAttemptCount());
+        assertNull(recovered.getNextAttemptAt());
+        assertNull(recovered.getProcessingStartedAt());
+        assertFalse(recovered.isManualRetryProcessing());
+        assertTrue(recovered.getProcessingVersion() > oldOwner.getProcessingVersion());
+        assertNull(receivedPayload.get());
+        assertEquals(manual ? 0 : 1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+        if (manual) {
+            assertEquals(500, recovered.getHttpStatus());
+            assertEquals("Receiver returned HTTP 500", recovered.getLastError());
+            assertEquals(409, assertThrows(ResponseStatusException.class,
+                    () -> resultService.finishManualRetry(oldOwner)).getStatusCode().value());
+        } else {
+            assertNull(recovered.getHttpStatus());
+            assertEquals("Processing expired before result was saved", recovered.getLastError());
+        }
+    }
+
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));
