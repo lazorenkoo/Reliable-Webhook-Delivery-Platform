@@ -562,19 +562,7 @@ class DeliveryIntegrationTest {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         AtomicInteger requests = new AtomicInteger();
-        receiver.removeContext("/webhook");
-        receiver.createContext("/webhook", exchange -> {
-            try (exchange) {
-                exchange.getRequestBody().readAllBytes();
-                requests.incrementAndGet();
-                entered.countDown();
-                if (release.await(5, TimeUnit.SECONDS)) {
-                    exchange.sendResponseHeaders(200, -1);
-                }
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-            }
-        });
+        blockReceiver(entered, release, requests);
 
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> deliveryService.sendPending(id));
@@ -635,6 +623,62 @@ class DeliveryIntegrationTest {
 
         assertEquals(DeliveryStatus.PROCESSING, deliveryRepository.findById(id).orElseThrow().getStatus());
         assertEquals(0, deliveryRepository.findById(id).orElseThrow().getAttemptCount());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void preventsConcurrentRetries(boolean manual) throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        receiverStatus.set(500);
+        assertEquals(200, send("POST", "/api/v1/deliveries",
+                Map.of("eventId", eventId, "endpointId", endpointId)).statusCode());
+        Delivery original = deliveryRepository.findAll().getFirst();
+        long id = original.getId();
+        original.setNextAttemptAt(Instant.now().minusSeconds(1));
+        deliveryRepository.save(original);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger requests = new AtomicInteger();
+        blockReceiver(entered, release, requests);
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var first = executor.submit(() -> manual
+                    ? deliveryService.retry(id) : deliveryService.sendScheduledRetry(id));
+            try {
+                assertTrue(entered.await(5, TimeUnit.SECONDS));
+                assertEquals(DeliveryStatus.PROCESSING, deliveryRepository.findById(id).orElseThrow().getStatus());
+                assertEquals(409, assertThrows(ResponseStatusException.class,
+                        () -> deliveryService.retry(id)).getStatusCode().value());
+                assertEquals(409, assertThrows(ResponseStatusException.class,
+                        () -> deliveryService.sendScheduledRetry(id)).getStatusCode().value());
+            } finally {
+                release.countDown();
+            }
+            assertEquals(200, first.get(5, TimeUnit.SECONDS));
+        }
+        assertEquals(1, requests.get());
+        assertEquals(manual ? 2 : 1, deliveryRepository.count());
+        assertEquals(manual ? 1 : 2, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
+        Delivery saved = deliveryRepository.findById(id).orElseThrow();
+        assertEquals(manual ? DeliveryStatus.FAILED : DeliveryStatus.SUCCEEDED, saved.getStatus());
+        assertNull(saved.getNextAttemptAt());
+    }
+
+    private void blockReceiver(CountDownLatch entered, CountDownLatch release, AtomicInteger requests) {
+        receiver.removeContext("/webhook");
+        receiver.createContext("/webhook", exchange -> {
+            try (exchange) {
+                exchange.getRequestBody().readAllBytes();
+                requests.incrementAndGet();
+                entered.countDown();
+                if (release.await(5, TimeUnit.SECONDS)) {
+                    exchange.sendResponseHeaders(200, -1);
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     private long createEndpoint() throws Exception {
