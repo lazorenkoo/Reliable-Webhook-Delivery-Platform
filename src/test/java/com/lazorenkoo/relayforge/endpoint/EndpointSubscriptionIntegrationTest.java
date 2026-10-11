@@ -217,6 +217,48 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals(0, eventRepository.count());
         assertEquals(0, deliveryRepository.count());
     }
+    @Test
+    void repeatedKeyReturnsSameEventWithoutExtraDeliveries() throws Exception {
+        createEndpoint();
+        Map<String, String> body = Map.of("type", "order.created", "payload", "{}");
+
+        HttpResponse<String> first = sendEvent("order-123", body);
+        HttpResponse<String> repeated = sendEvent("order-123", body);
+
+        assertEquals(201, first.statusCode());
+        assertEquals(201, repeated.statusCode());
+        assertEquals(jsonMapper.readTree(first.body()).get("id").asLong(),
+                jsonMapper.readTree(repeated.body()).get("id").asLong());
+        assertEquals(409, sendEvent("order-123",
+                Map.of("type", "order.paid", "payload", "{}")).statusCode());
+        assertEquals(409, sendEvent("order-123",
+                Map.of("type", "order.created", "payload", "{\"id\":2}")).statusCode());
+        assertEquals(1, eventRepository.count());
+        assertEquals(1, deliveryRepository.count());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 256})
+    void rejectsInvalidIdempotencyKeyBeforeSaving(int length) throws Exception {
+        HttpResponse<String> response = sendEvent("a".repeat(length),
+                Map.of("type", "order.created", "payload", "{}"));
+
+        assertEquals(400, response.statusCode());
+        assertEquals(0, eventRepository.count());
+        assertEquals(0, deliveryRepository.count());
+    }
+
+    private HttpResponse<String> sendEvent(String key, Object body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/events"))
+                .timeout(Duration.ofSeconds(20))
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", key)
+                .POST(HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(body)))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
                 "url", "https://example.com/webhook", "subscribedEvents", List.of("order.created")));
