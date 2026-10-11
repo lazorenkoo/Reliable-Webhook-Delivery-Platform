@@ -156,6 +156,18 @@ class DeliveryIntegrationTest {
         assertNotNull(delivery.getLastError());
         assertFalse(delivery.getLastError().isBlank());
         assertNotNull(delivery.getCompletedAt());
+
+        HttpResponse<String> history = send("GET", "/api/v1/deliveries/" + delivery.getId() + "/attempts", null);
+        assertEquals(200, history.statusCode());
+        JsonNode attempts = jsonMapper.readTree(history.body());
+        assertEquals(1, attempts.size());
+        JsonNode attempt = attempts.get(0);
+        assertEquals(delivery.getId(), attempt.get("deliveryId").asLong());
+        assertEquals(1, attempt.get("attemptNumber").asInt());
+        assertEquals("FAILED", attempt.get("status").asText());
+        assertTrue(attempt.get("httpStatus").isNull());
+        assertEquals(delivery.getLastError(), attempt.get("error").asText());
+        assertEquals(delivery.getCompletedAt(), Instant.parse(attempt.get("completedAt").asText()));
     }
 
     @Test
@@ -308,6 +320,7 @@ class DeliveryIntegrationTest {
     @Test
     void rejectsRetryOfMissingDelivery() throws Exception {
         assertEquals(404, send("POST", "/api/v1/deliveries/999999/retry", null).statusCode());
+        assertEquals(404, send("GET", "/api/v1/deliveries/999999/attempts", null).statusCode());
         assertEquals(0, deliveryRepository.count());
         assertNull(receivedPayload.get());
     }
@@ -413,6 +426,25 @@ class DeliveryIntegrationTest {
         assertNull(retried.getNextAttemptAt());
         assertNull(retried.getLastError());
         assertEquals(1, deliveryRepository.count());
+
+        HttpResponse<String> history = send("GET", "/api/v1/deliveries/" + original.getId() + "/attempts", null);
+        assertEquals(200, history.statusCode());
+        JsonNode attempts = jsonMapper.readTree(history.body());
+        assertEquals(2, attempts.size());
+        JsonNode firstAttempt = attempts.get(0);
+        assertEquals(1, firstAttempt.get("attemptNumber").asInt());
+        assertEquals("FAILED", firstAttempt.get("status").asText());
+        assertEquals(500, firstAttempt.get("httpStatus").asInt());
+        assertEquals("Receiver returned HTTP 500", firstAttempt.get("error").asText());
+        assertEquals(original.getCompletedAt(), Instant.parse(firstAttempt.get("completedAt").asText()));
+        JsonNode secondAttempt = attempts.get(1);
+        assertEquals(2, secondAttempt.get("attemptNumber").asInt());
+        assertEquals("SUCCEEDED", secondAttempt.get("status").asText());
+        assertEquals(200, secondAttempt.get("httpStatus").asInt());
+        assertTrue(secondAttempt.get("error").isNull());
+        assertEquals(retried.getCompletedAt(), Instant.parse(secondAttempt.get("completedAt").asText()));
+        assertEquals(original.getId(), firstAttempt.get("deliveryId").asLong());
+        assertEquals(original.getId(), secondAttempt.get("deliveryId").asLong());
     }
 
     @Test
