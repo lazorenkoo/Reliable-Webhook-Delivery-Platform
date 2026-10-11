@@ -20,15 +20,17 @@ public class DeliveryService {
     private final WebhookSender webhookSender;
     private final DeliveryRepository deliveryRepository;
     private final DeliveryAttemptRepository attemptRepository;
+    private final DeliveryResultService resultService;
 
     public DeliveryService(EventService eventService, EndpointService endpointService,
                            WebhookSender webhookSender, DeliveryRepository deliveryRepository,
-                           DeliveryAttemptRepository attemptRepository) {
+                           DeliveryAttemptRepository attemptRepository, DeliveryResultService resultService) {
         this.eventService = eventService;
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
         this.deliveryRepository = deliveryRepository;
         this.attemptRepository = attemptRepository;
+        this.resultService = resultService;
     }
 
     public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
@@ -156,7 +158,6 @@ public class DeliveryService {
     }
 
     private void saveResult(Delivery delivery) {
-        deliveryRepository.save(delivery);
-        attemptRepository.save(new DeliveryAttempt(delivery));
+        resultService.save(delivery);
     }
 }
