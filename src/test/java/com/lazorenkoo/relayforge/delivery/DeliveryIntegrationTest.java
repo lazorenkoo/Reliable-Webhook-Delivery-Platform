@@ -48,6 +48,9 @@ class DeliveryIntegrationTest {
     @Autowired
     private EndpointRepository endpointRepository;
 
+    @Autowired
+    private DeliveryService deliveryService;
+
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private HttpClient client;
     private HttpServer receiver;
@@ -341,6 +344,40 @@ class DeliveryIntegrationTest {
         assertEquals(201, allowed.statusCode());
         assertEquals(1, eventRepository.count());
     }
+    @Test
+    void workerSendsSavedDeliveryAndSkipsDisabledEndpoint() throws Exception {
+        long endpointId = createEndpoint();
+        assertEquals(200, send("PUT", "/api/v1/endpoints/" + endpointId + "/subscriptions",
+                Map.of("subscribedEvents", java.util.List.of("order.created"))).statusCode());
+        String payload = "{\"orderId\":123}";
+        long eventId = createEvent(payload);
+        Delivery pending = deliveryRepository.findByEventId(eventId).getFirst();
+        assertEquals(DeliveryStatus.PENDING, pending.getStatus());
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService);
+
+        assertEquals(200, send("PATCH", "/api/v1/endpoints/" + endpointId + "/disable", null).statusCode());
+        worker.sendPendingDeliveries();
+        assertNull(receivedPayload.get());
+        assertEquals(DeliveryStatus.PENDING,
+                deliveryRepository.findById(pending.getId()).orElseThrow().getStatus());
+
+        assertEquals(200, send("PATCH", "/api/v1/endpoints/" + endpointId + "/enable", null).statusCode());
+        worker.sendPendingDeliveries();
+
+        Delivery sent = deliveryRepository.findById(pending.getId()).orElseThrow();
+        assertEquals(payload, receivedPayload.get());
+        assertEquals(DeliveryStatus.SUCCEEDED, sent.getStatus());
+        assertEquals(200, sent.getHttpStatus());
+        assertNotNull(sent.getCompletedAt());
+        assertEquals(pending.getCreatedAt(), sent.getCreatedAt());
+        assertEquals(1, deliveryRepository.count());
+
+        receivedPayload.set(null);
+        worker.sendPendingDeliveries();
+        assertNull(receivedPayload.get());
+        assertEquals(1, deliveryRepository.count());
+    }
+
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));
