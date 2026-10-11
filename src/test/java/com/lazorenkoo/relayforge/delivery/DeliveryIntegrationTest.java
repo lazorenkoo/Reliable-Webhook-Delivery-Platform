@@ -24,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -52,6 +54,15 @@ class DeliveryIntegrationTest {
 
     @Autowired
     private DeliveryService deliveryService;
+
+    @Autowired
+    private DeliveryResultService resultService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private DeliveryAttemptRepository attemptRepository;
 
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
     private HttpClient client;
@@ -469,6 +480,30 @@ class DeliveryIntegrationTest {
         receivedPayload.set(null);
         new DeliveryWorker(deliveryRepository, deliveryService).sendPendingDeliveries();
         assertNull(receivedPayload.get());
+    }
+
+    @Test
+    void rollsBackDeliveryWhenAttemptCannotBeSaved() {
+        Delivery delivery = deliveryRepository.save(new Delivery());
+        long id = delivery.getId();
+        delivery.setStatus(DeliveryStatus.SUCCEEDED);
+        delivery.setAttemptCount(1);
+        delivery.setHttpStatus(200);
+        delivery.setCompletedAt(Instant.now());
+        jdbcTemplate.execute("ALTER TABLE delivery_attempts ADD CONSTRAINT reject_test_attempt "
+                + "CHECK (attempt_number <> 1) NOT VALID");
+        try {
+            assertThrows(DataIntegrityViolationException.class, () -> resultService.save(delivery));
+
+            Delivery saved = deliveryRepository.findById(id).orElseThrow();
+            assertEquals(DeliveryStatus.PENDING, saved.getStatus());
+            assertEquals(0, saved.getAttemptCount());
+            assertNull(saved.getHttpStatus());
+            assertNull(saved.getCompletedAt());
+            assertTrue(attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).isEmpty());
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE delivery_attempts DROP CONSTRAINT reject_test_attempt");
+        }
     }
 
     private long createEndpoint() throws Exception {
