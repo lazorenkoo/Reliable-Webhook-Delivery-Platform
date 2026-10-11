@@ -27,6 +27,8 @@ public class Delivery {
     private Instant completedAt;
     private Integer attemptCount = 0;
     private Instant nextAttemptAt;
+    private Instant processingStartedAt;
+    private Long processingVersion = 0L;
 
     @Column(columnDefinition = "text")
     private String lastError;
@@ -41,6 +43,25 @@ public class Delivery {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(Instant processingStartedAt) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
+    public long getProcessingVersion() {
+        return processingVersion == null ? 0 : processingVersion;
+    }
+
+    public void setProcessingVersion(long processingVersion) {
+        if (processingVersion < 0) {
+            throw new IllegalArgumentException("Processing version must not be negative");
+        }
+        this.processingVersion = processingVersion;
     }
 
     public int getAttemptCount() {
