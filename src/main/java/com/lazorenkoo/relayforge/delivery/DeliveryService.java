@@ -21,16 +21,19 @@ public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
     private final DeliveryAttemptRepository attemptRepository;
     private final DeliveryResultService resultService;
+    private final DeliveryClaimService claimService;
 
     public DeliveryService(EventService eventService, EndpointService endpointService,
                            WebhookSender webhookSender, DeliveryRepository deliveryRepository,
-                           DeliveryAttemptRepository attemptRepository, DeliveryResultService resultService) {
+                           DeliveryAttemptRepository attemptRepository, DeliveryResultService resultService,
+                           DeliveryClaimService claimService) {
         this.eventService = eventService;
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
         this.deliveryRepository = deliveryRepository;
         this.attemptRepository = attemptRepository;
         this.resultService = resultService;
+        this.claimService = claimService;
     }
 
     public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
@@ -59,9 +62,14 @@ public class DeliveryService {
         if (delivery.getStatus() != DeliveryStatus.FAILED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only failed deliveries can be retried");
         }
+        claimService.claim(delivery, DeliveryStatus.FAILED);
         delivery.setNextAttemptAt(null);
-        deliveryRepository.save(delivery);
-        return send(delivery.getEventId(), delivery.getEndpointId());
+        try {
+            return send(delivery.getEventId(), delivery.getEndpointId());
+        } finally {
+            delivery.setStatus(DeliveryStatus.FAILED);
+            deliveryRepository.save(delivery);
+        }
     }
 
     public List<DeliveryAttempt> findAttempts(Long id) {
@@ -80,6 +88,7 @@ public class DeliveryService {
         if (!endpoint.isEnabled()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
+        claimService.claimRetry(delivery);
         return sendDelivery(delivery, event, endpoint);
     }
 
@@ -99,6 +108,7 @@ public class DeliveryService {
         delivery.setEndpointId(endpointId);
         delivery = deliveryRepository.save(delivery);
 
+        claimService.claim(delivery, DeliveryStatus.PENDING);
         return sendDelivery(delivery, event, endpoint);
     }
 
@@ -114,6 +124,7 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
 
+        claimService.claim(delivery, DeliveryStatus.PENDING);
         return sendDelivery(delivery, event, endpoint);
     }
 

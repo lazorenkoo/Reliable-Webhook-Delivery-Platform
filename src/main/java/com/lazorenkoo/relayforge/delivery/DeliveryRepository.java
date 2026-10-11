@@ -16,8 +16,18 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Delivery delivery set delivery.status = :processing "
-            + "where delivery.id = :id and delivery.status = :expected")
-    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing);
+            + "where delivery.id = :id and delivery.status = :expected "
+            + "and coalesce(delivery.attemptCount, 0) = :attempts")
+    int claim(Long id, DeliveryStatus expected, DeliveryStatus processing, int attempts);
+
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Delivery delivery set delivery.status = :processing "
+            + "where delivery.id = :id and delivery.status = :failed "
+            + "and delivery.nextAttemptAt = :scheduledAt and delivery.nextAttemptAt <= :now "
+            + "and delivery.attemptCount = :attempts and delivery.attemptCount < 3")
+    int claimRetry(Long id, DeliveryStatus failed, DeliveryStatus processing,
+                   Instant scheduledAt, Instant now, int attempts);
 
     @Query("select delivery from Delivery delivery, WebhookEndpoint endpoint "
             + "where delivery.endpointId = endpoint.id and endpoint.enabled = true "
