@@ -19,13 +19,16 @@ public class DeliveryService {
     private final EndpointService endpointService;
     private final WebhookSender webhookSender;
     private final DeliveryRepository deliveryRepository;
+    private final DeliveryAttemptRepository attemptRepository;
 
     public DeliveryService(EventService eventService, EndpointService endpointService,
-                           WebhookSender webhookSender, DeliveryRepository deliveryRepository) {
+                           WebhookSender webhookSender, DeliveryRepository deliveryRepository,
+                           DeliveryAttemptRepository attemptRepository) {
         this.eventService = eventService;
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
         this.deliveryRepository = deliveryRepository;
+        this.attemptRepository = attemptRepository;
     }
 
     public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
@@ -57,6 +60,11 @@ public class DeliveryService {
         delivery.setNextAttemptAt(null);
         deliveryRepository.save(delivery);
         return send(delivery.getEventId(), delivery.getEndpointId());
+    }
+
+    public List<DeliveryAttempt> findAttempts(Long id) {
+        findById(id);
+        return attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id);
     }
 
     public int sendScheduledRetry(Long id) {
@@ -124,14 +132,14 @@ public class DeliveryService {
             }
             delivery.setCompletedAt(Instant.now());
             DeliveryRetryPolicy.scheduleRetry(delivery);
-            deliveryRepository.save(delivery);
+            saveResult(delivery);
             return httpStatus;
         } catch (IOException exception) {
             delivery.setLastError(exception.toString());
             delivery.setStatus(DeliveryStatus.FAILED);
             delivery.setCompletedAt(Instant.now());
             DeliveryRetryPolicy.scheduleRetry(delivery);
-            deliveryRepository.save(delivery);
+            saveResult(delivery);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
         } catch (InterruptedException exception) {
             delivery.setLastError("Webhook delivery interrupted");
@@ -139,11 +147,16 @@ public class DeliveryService {
                 delivery.setStatus(DeliveryStatus.FAILED);
                 delivery.setCompletedAt(Instant.now());
                 DeliveryRetryPolicy.scheduleRetry(delivery);
-                deliveryRepository.save(delivery);
+                saveResult(delivery);
             } finally {
                 Thread.currentThread().interrupt();
             }
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Webhook delivery interrupted", exception);
         }
+    }
+
+    private void saveResult(Delivery delivery) {
+        deliveryRepository.save(delivery);
+        attemptRepository.save(new DeliveryAttempt(delivery));
     }
 }

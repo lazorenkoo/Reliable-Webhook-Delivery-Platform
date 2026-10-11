@@ -37,6 +37,11 @@ public class DeliveryController {
         return new DeliveryResponse(httpStatus);
     }
 
+    @GetMapping("/{id}/attempts")
+    public List<DeliveryAttempt> findAttempts(@PathVariable Long id) {
+        return deliveryService.findAttempts(id);
+    }
+
     @PostMapping
     public DeliveryResponse send(@RequestBody CreateDeliveryRequest request) {
         int httpStatus = deliveryService.send(request.getEventId(), request.getEndpointId());

@@ -33,7 +33,8 @@ class DeliveryServiceTest {
         endpointService = mock(EndpointService.class);
         webhookSender = mock(WebhookSender.class);
         deliveryRepository = mock(DeliveryRepository.class);
-        deliveryService = new DeliveryService(eventService, endpointService, webhookSender, deliveryRepository);
+        deliveryService = new DeliveryService(eventService, endpointService, webhookSender, deliveryRepository,
+                mock(DeliveryAttemptRepository.class));
         savedStatuses = new ArrayList<>();
     }
 
