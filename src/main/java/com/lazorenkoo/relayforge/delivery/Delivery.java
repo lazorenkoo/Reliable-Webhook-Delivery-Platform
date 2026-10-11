@@ -25,6 +25,8 @@ public class Delivery {
     private Integer httpStatus;
     private Instant createdAt;
     private Instant completedAt;
+    private Integer attemptCount = 0;
+    private Instant nextAttemptAt;
 
     @Column(columnDefinition = "text")
     private String lastError;
@@ -39,6 +41,25 @@ public class Delivery {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount == null ? 0 : attemptCount;
+    }
+
+    public void setAttemptCount(int attemptCount) {
+        if (attemptCount < 0) {
+            throw new IllegalArgumentException("Attempt count must not be negative");
+        }
+        this.attemptCount = attemptCount;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public void setNextAttemptAt(Instant nextAttemptAt) {
+        this.nextAttemptAt = nextAttemptAt;
     }
 
     public Instant getCompletedAt() {

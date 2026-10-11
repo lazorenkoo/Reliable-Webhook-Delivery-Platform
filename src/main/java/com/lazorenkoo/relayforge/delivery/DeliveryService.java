@@ -92,6 +92,11 @@ public class DeliveryService {
     }
 
     private int sendDelivery(Delivery delivery, Event event, WebhookEndpoint endpoint) {
+        delivery.setAttemptCount(delivery.getAttemptCount() + 1);
+        delivery.setNextAttemptAt(null);
+        delivery.setLastError(null);
+        delivery.setHttpStatus(null);
+        delivery.setCompletedAt(null);
         try {
             int httpStatus = webhookSender.send(endpoint.getUrl(), event.getPayload());
             delivery.setHttpStatus(httpStatus);
