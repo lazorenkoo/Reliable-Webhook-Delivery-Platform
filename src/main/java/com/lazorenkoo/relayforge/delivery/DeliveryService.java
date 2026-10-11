@@ -107,12 +107,14 @@ public class DeliveryService {
                 delivery.setLastError("Receiver returned HTTP " + httpStatus);
             }
             delivery.setCompletedAt(Instant.now());
+            DeliveryRetryPolicy.scheduleRetry(delivery);
             deliveryRepository.save(delivery);
             return httpStatus;
         } catch (IOException exception) {
             delivery.setLastError(exception.toString());
             delivery.setStatus(DeliveryStatus.FAILED);
             delivery.setCompletedAt(Instant.now());
+            DeliveryRetryPolicy.scheduleRetry(delivery);
             deliveryRepository.save(delivery);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
         } catch (InterruptedException exception) {
@@ -120,6 +122,7 @@ public class DeliveryService {
             try {
                 delivery.setStatus(DeliveryStatus.FAILED);
                 delivery.setCompletedAt(Instant.now());
+                DeliveryRetryPolicy.scheduleRetry(delivery);
                 deliveryRepository.save(delivery);
             } finally {
                 Thread.currentThread().interrupt();
