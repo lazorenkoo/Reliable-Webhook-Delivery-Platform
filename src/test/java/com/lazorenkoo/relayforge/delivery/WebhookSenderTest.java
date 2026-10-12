@@ -35,7 +35,7 @@ class WebhookSenderTest {
             String payload = "{\"message\":\"Привет\"}";
             String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/webhook";
 
-            assertEquals(receiverStatus, sender.send(url, payload));
+            assertEquals(receiverStatus, sender.send(url, payload, "test-secret", 1L));
             assertEquals("POST", receivedMethod.get());
             assertEquals("application/json", receivedContentType.get());
             assertEquals(payload, receivedBody.get());

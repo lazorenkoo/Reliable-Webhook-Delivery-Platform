@@ -55,6 +55,7 @@ class DeliveryServiceTest {
         WebhookEndpoint endpoint = new WebhookEndpoint();
         endpoint.setUrl("https://example.com/webhook");
         endpoint.setEnabled(enabled);
+        endpoint.setSigningSecret("test-secret");
         when(eventService.findById(1L)).thenReturn(event);
         when(endpointService.findById(2L)).thenReturn(endpoint);
         when(deliveryRepository.save(any(Delivery.class))).thenAnswer(invocation -> {
@@ -72,7 +73,7 @@ class DeliveryServiceTest {
     @Test
     void savesSuccessfulDelivery() throws Exception {
         prepareDelivery(true);
-        when(webhookSender.send(anyString(), anyString())).thenReturn(204);
+        when(webhookSender.send(anyString(), anyString(), anyString(), any())).thenReturn(204);
 
         assertEquals(204, deliveryService.send(1L, 2L));
 
@@ -81,13 +82,13 @@ class DeliveryServiceTest {
         assertNull(savedDelivery.getLastError());
         assertEquals(1L, savedDelivery.getEventId());
         assertEquals(2L, savedDelivery.getEndpointId());
-        verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}");
+        verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}", "test-secret", null);
     }
 
     @Test
     void savesFailedDeliveryForServerError() throws Exception {
         prepareDelivery(true);
-        when(webhookSender.send(anyString(), anyString())).thenReturn(500);
+        when(webhookSender.send(anyString(), anyString(), anyString(), any())).thenReturn(500);
 
         assertEquals(500, deliveryService.send(1L, 2L));
 
@@ -99,7 +100,7 @@ class DeliveryServiceTest {
     @Test
     void savesFailedDeliveryForNetworkError() throws Exception {
         prepareDelivery(true);
-        when(webhookSender.send(anyString(), anyString())).thenThrow(new IOException("Connection failed"));
+        when(webhookSender.send(anyString(), anyString(), anyString(), any())).thenThrow(new IOException("Connection failed"));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> deliveryService.send(1L, 2L));
@@ -134,7 +135,7 @@ class DeliveryServiceTest {
     @Test
     void preservesInterruptionAndSavesFailure() throws Exception {
         prepareDelivery(true);
-        when(webhookSender.send(anyString(), anyString())).thenThrow(new InterruptedException());
+        when(webhookSender.send(anyString(), anyString(), anyString(), any())).thenThrow(new InterruptedException());
 
         try {
             ResponseStatusException exception = assertThrows(ResponseStatusException.class,
@@ -183,7 +184,7 @@ class DeliveryServiceTest {
         delivery.setEventId(1L);
         delivery.setEndpointId(2L);
         when(deliveryRepository.findById(3L)).thenReturn(Optional.of(delivery));
-        when(webhookSender.send(anyString(), anyString())).thenReturn(204);
+        when(webhookSender.send(anyString(), anyString(), anyString(), any())).thenReturn(204);
 
         assertEquals(204, deliveryService.sendPending(3L));
 
@@ -192,7 +193,7 @@ class DeliveryServiceTest {
         assertEquals(204, delivery.getHttpStatus());
         assertNotNull(delivery.getCompletedAt());
         verify(deliveryRepository, times(1)).save(same(delivery));
-        verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}");
+        verify(webhookSender).send("https://example.com/webhook", "{\"orderId\":123}", "test-secret", null);
     }
 
     @Test

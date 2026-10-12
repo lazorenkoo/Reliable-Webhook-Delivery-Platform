@@ -89,6 +89,7 @@ public class DeliveryService {
         if (!endpoint.isEnabled()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
+        requireSigningSecret(endpoint);
         claimService.claimRetry(delivery);
         return sendDelivery(delivery, event, endpoint);
     }
@@ -104,6 +105,7 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
 
+        requireSigningSecret(endpoint);
         Delivery delivery = new Delivery();
         delivery.setEventId(eventId);
         delivery.setEndpointId(endpointId);
@@ -125,6 +127,7 @@ public class DeliveryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Endpoint is disabled");
         }
 
+        requireSigningSecret(endpoint);
         claimService.claim(delivery, DeliveryStatus.PENDING);
         return sendDelivery(delivery, event, endpoint);
     }
@@ -136,7 +139,8 @@ public class DeliveryService {
         delivery.setHttpStatus(null);
         delivery.setCompletedAt(null);
         try {
-            int httpStatus = webhookSender.send(endpoint.getUrl(), webhookPayload.create(event));
+            int httpStatus = webhookSender.send(endpoint.getUrl(), webhookPayload.create(event),
+                    endpoint.getSigningSecret(), event.getId());
             delivery.setHttpStatus(httpStatus);
             if (httpStatus >= 200 && httpStatus < 300) {
                 delivery.setStatus(DeliveryStatus.SUCCEEDED);
@@ -171,5 +175,11 @@ public class DeliveryService {
 
     private void saveResult(Delivery delivery) {
         resultService.save(delivery);
+    }
+
+    private void requireSigningSecret(WebhookEndpoint endpoint) {
+        if (endpoint.getSigningSecret() == null || endpoint.getSigningSecret().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Rotate endpoint secret before sending webhooks");
+        }
     }
 }
