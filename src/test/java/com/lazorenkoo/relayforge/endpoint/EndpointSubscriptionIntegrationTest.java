@@ -352,6 +352,23 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals("OK", response.body());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"endpoints", "endpoints;param=1"})
+    void cannotRotateSecretWithoutApiKey(String endpointPath) throws Exception {
+        long id = createEndpoint();
+        String original = endpointRepository.findById(id).orElseThrow().getSigningSecret();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/" + endpointPath + "/" + id + "/rotate-secret"))
+                .timeout(Duration.ofSeconds(10))
+                .POST(HttpRequest.BodyPublishers.noBody()).build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(401, response.statusCode());
+        assertFalse(response.body().contains(original));
+        assertEquals(original, endpointRepository.findById(id).orElseThrow().getSigningSecret());
+    }
+
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
                 "url", "https://example.com/webhook", "subscribedEvents", List.of("order.created")));
