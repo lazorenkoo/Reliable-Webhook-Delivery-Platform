@@ -7,6 +7,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,12 +17,12 @@ class ApiKeyFilterTest {
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t"})
     void rejectsMissingConfiguredKey(String key) {
-        assertThrows(IllegalArgumentException.class, () -> new ApiKeyFilter(key));
+        assertThrows(IllegalArgumentException.class, () -> new ApiKeyFilter(key, JsonMapper.builder().build()));
     }
 
     @Test
     void healthWithContextPathRemainsOpenButApiDoesNot() throws Exception {
-        ApiKeyFilter filter = new ApiKeyFilter("test-key");
+        ApiKeyFilter filter = new ApiKeyFilter("test-key", JsonMapper.builder().build());
         MockHttpServletRequest health = new MockHttpServletRequest("GET", "/relay/health");
         health.setContextPath("/relay");
         health.setServletPath("/health");

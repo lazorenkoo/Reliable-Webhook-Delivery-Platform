@@ -332,7 +332,9 @@ class EndpointSubscriptionIntegrationTest {
 
         assertEquals(401, response.statusCode());
         assertEquals("application/json", response.headers().firstValue("Content-Type").orElseThrow().split(";")[0]);
-        assertEquals("Valid API key is required", jsonMapper.readTree(response.body()).get("error").asText());
+        assertEquals("Valid API key is required", jsonMapper.readTree(response.body()).get("message").asText());
+        assertEquals(401, jsonMapper.readTree(response.body()).get("status").asInt());
+        assertEquals("/api/v1/events", jsonMapper.readTree(response.body()).get("path").asText());
         assertFalse(response.body().contains("test-api-key"));
         assertFalse(response.body().contains("wrong-key"));
         assertEquals(0, eventRepository.count());
