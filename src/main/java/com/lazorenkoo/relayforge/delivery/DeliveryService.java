@@ -7,6 +7,7 @@ import java.util.List;
 import com.lazorenkoo.relayforge.endpoint.EndpointService;
 import com.lazorenkoo.relayforge.endpoint.WebhookEndpoint;
 import com.lazorenkoo.relayforge.endpoint.WebhookUrlPolicy;
+import com.lazorenkoo.relayforge.endpoint.BlockedWebhookUrlException;
 import com.lazorenkoo.relayforge.event.Event;
 import com.lazorenkoo.relayforge.event.EventService;
 import org.springframework.http.HttpStatus;
@@ -160,7 +161,9 @@ public class DeliveryService {
             delivery.setLastError(exception.toString());
             delivery.setStatus(DeliveryStatus.FAILED);
             delivery.setCompletedAt(Instant.now());
-            DeliveryRetryPolicy.scheduleRetry(delivery);
+            if (!(exception.getCause() instanceof BlockedWebhookUrlException)) {
+                DeliveryRetryPolicy.scheduleRetry(delivery);
+            }
             saveResult(delivery);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Webhook delivery failed", exception);
         } catch (InterruptedException exception) {
