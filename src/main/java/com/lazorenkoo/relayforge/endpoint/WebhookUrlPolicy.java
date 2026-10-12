@@ -1,6 +1,12 @@
 package com.lazorenkoo.relayforge.endpoint;
 
 import java.net.URI;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -11,9 +17,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class WebhookUrlPolicy {
 
     private final boolean allowLocal;
+    private final Set<String> allowedHosts;
+    private final WebhookDnsResolver dnsResolver;
 
-    public WebhookUrlPolicy(@Value("${relayforge.webhooks.allow-local:false}") boolean allowLocal) {
+    public WebhookUrlPolicy(@Value("${relayforge.webhooks.allow-local:false}") boolean allowLocal,
+                            @Value("${relayforge.webhooks.allowed-hosts:}") String allowedHosts,
+                            WebhookDnsResolver dnsResolver) {
         this.allowLocal = allowLocal;
+        this.allowedHosts = Arrays.stream(allowedHosts.split(","))
+                .map(String::trim).map(host -> host.toLowerCase(Locale.ROOT))
+                .filter(host -> !host.isEmpty()).collect(Collectors.toSet());
+        this.dnsResolver = dnsResolver;
     }
 
     public URI validate(String url) {
@@ -38,7 +52,33 @@ public class WebhookUrlPolicy {
         if (port == 0 || port > 65535 || (!allowLocal && port != -1 && port != (https ? 443 : 80))) {
             throw invalid("Webhook URL port is not allowed");
         }
+        if (uri.getHost().contains("%")) {
+            throw invalid("Scoped webhook addresses are not allowed");
+        }
+        if (!allowLocal) {
+            validateHost(uri.getHost());
+        }
         return uri;
+    }
+
+    private void validateHost(String host) {
+        if (!allowedHosts.contains(host.toLowerCase(Locale.ROOT))) {
+            throw invalid("Webhook host is not configured as allowed");
+        }
+        InetAddress[] addresses;
+        try {
+            addresses = dnsResolver.resolve(host);
+        } catch (UnknownHostException exception) {
+            throw invalid("Webhook host could not be resolved");
+        }
+        if (addresses.length == 0) {
+            throw invalid("Webhook host has no addresses");
+        }
+        for (InetAddress address : addresses) {
+            if (!PublicAddressPolicy.isPublic(address)) {
+                throw invalid("Webhook host must resolve only to public addresses");
+            }
+        }
     }
 
     private ResponseStatusException invalid(String message) {
