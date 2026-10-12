@@ -63,7 +63,7 @@ class WebhookSenderTest {
             }
         });
         server.start();
-        try (HttpClient client = new HttpClientConfig().httpClient()) {
+        try (HttpClient client = new HttpClientConfig().httpClient("", 3128)) {
             WebhookSender sender = new WebhookSender(client, new WebhookUrlPolicy(true, "", new WebhookDnsResolver()));
             String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/webhook";
 

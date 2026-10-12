@@ -1,4 +1,5 @@
 set -eu
+rm -f /run/squid/squid.pid /run/dnsmasq.pid
 
 iptables -P OUTPUT DROP
 iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -16,4 +17,5 @@ ip6tables -P OUTPUT DROP
 ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 ip6tables -A OUTPUT -p udp -d ::1 --dport 1024:65535 -j ACCEPT
 
+dnsmasq --no-resolv --server=127.0.0.11 --listen-address=0.0.0.0 --bind-interfaces --user=proxy --cache-size=0
 exec squid -N -f /etc/squid/squid.conf
