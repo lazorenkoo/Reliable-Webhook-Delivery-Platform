@@ -286,6 +286,7 @@ class EndpointSubscriptionIntegrationTest {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/events"))
                 .timeout(Duration.ofSeconds(20))
+                .header("X-API-Key", "test-api-key")
                 .header("Content-Type", "application/json")
                 .header("Idempotency-Key", key)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonMapper.writeValueAsString(body)))
@@ -326,7 +327,8 @@ class EndpointSubscriptionIntegrationTest {
     private HttpResponse<String> send(String method, String path, Object body) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + path))
-                .timeout(Duration.ofSeconds(20));
+                .timeout(Duration.ofSeconds(20))
+                .header("X-API-Key", "test-api-key");
         if (body == null) {
             request.method(method, HttpRequest.BodyPublishers.noBody());
         } else {

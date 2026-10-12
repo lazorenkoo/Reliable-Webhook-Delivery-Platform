@@ -844,7 +844,8 @@ class DeliveryIntegrationTest {
     private HttpResponse<String> send(String method, String path, Object body) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + path))
-                .timeout(Duration.ofSeconds(20));
+                .timeout(Duration.ofSeconds(20))
+                .header("X-API-Key", "test-api-key");
         if (body == null) {
             request.method(method, HttpRequest.BodyPublishers.noBody());
         } else {
