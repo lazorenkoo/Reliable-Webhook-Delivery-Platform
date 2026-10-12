@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.lazorenkoo.relayforge.endpoint.EndpointService;
 import com.lazorenkoo.relayforge.endpoint.WebhookEndpoint;
+import com.lazorenkoo.relayforge.endpoint.WebhookUrlPolicy;
 import com.lazorenkoo.relayforge.event.Event;
 import com.lazorenkoo.relayforge.event.EventService;
 import org.springframework.http.HttpStatus;
@@ -23,11 +24,13 @@ public class DeliveryService {
     private final DeliveryResultService resultService;
     private final DeliveryClaimService claimService;
     private final WebhookPayload webhookPayload;
+    private final WebhookUrlPolicy urlPolicy;
 
     public DeliveryService(EventService eventService, EndpointService endpointService,
                            WebhookSender webhookSender, DeliveryRepository deliveryRepository,
                            DeliveryAttemptRepository attemptRepository, DeliveryResultService resultService,
-                           DeliveryClaimService claimService, WebhookPayload webhookPayload) {
+                           DeliveryClaimService claimService, WebhookPayload webhookPayload,
+                           WebhookUrlPolicy urlPolicy) {
         this.eventService = eventService;
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
@@ -36,6 +39,7 @@ public class DeliveryService {
         this.resultService = resultService;
         this.claimService = claimService;
         this.webhookPayload = webhookPayload;
+        this.urlPolicy = urlPolicy;
     }
 
     public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
@@ -178,6 +182,7 @@ public class DeliveryService {
     }
 
     private void requireSigningSecret(WebhookEndpoint endpoint) {
+        urlPolicy.validate(endpoint.getUrl());
         if (endpoint.getSigningSecret() == null || endpoint.getSigningSecret().isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Rotate endpoint secret before sending webhooks");
         }

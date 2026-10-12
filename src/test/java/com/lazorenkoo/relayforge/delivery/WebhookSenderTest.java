@@ -41,7 +41,9 @@ class WebhookSenderTest {
         server.start();
 
         try (HttpClient client = HttpClient.newHttpClient()) {
-            WebhookSender sender = new WebhookSender(client);
+            WebhookSender sender = new WebhookSender(client,
+                    new com.lazorenkoo.relayforge.endpoint.WebhookUrlPolicy(true, "",
+                            new com.lazorenkoo.relayforge.endpoint.WebhookDnsResolver()));
             String payload = "{\"message\":\"Привет\"}";
             String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/webhook";
 
