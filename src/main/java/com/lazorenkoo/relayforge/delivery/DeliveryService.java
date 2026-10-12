@@ -22,11 +22,12 @@ public class DeliveryService {
     private final DeliveryAttemptRepository attemptRepository;
     private final DeliveryResultService resultService;
     private final DeliveryClaimService claimService;
+    private final WebhookPayload webhookPayload;
 
     public DeliveryService(EventService eventService, EndpointService endpointService,
                            WebhookSender webhookSender, DeliveryRepository deliveryRepository,
                            DeliveryAttemptRepository attemptRepository, DeliveryResultService resultService,
-                           DeliveryClaimService claimService) {
+                           DeliveryClaimService claimService, WebhookPayload webhookPayload) {
         this.eventService = eventService;
         this.endpointService = endpointService;
         this.webhookSender = webhookSender;
@@ -34,6 +35,7 @@ public class DeliveryService {
         this.attemptRepository = attemptRepository;
         this.resultService = resultService;
         this.claimService = claimService;
+        this.webhookPayload = webhookPayload;
     }
 
     public List<Delivery> findAll(DeliveryStatus status, Long eventId) {
@@ -134,7 +136,7 @@ public class DeliveryService {
         delivery.setHttpStatus(null);
         delivery.setCompletedAt(null);
         try {
-            int httpStatus = webhookSender.send(endpoint.getUrl(), event.getPayload());
+            int httpStatus = webhookSender.send(endpoint.getUrl(), webhookPayload.create(event));
             delivery.setHttpStatus(httpStatus);
             if (httpStatus >= 200 && httpStatus < 300) {
                 delivery.setStatus(DeliveryStatus.SUCCEEDED);

@@ -36,8 +36,10 @@ class DeliveryServiceTest {
         DeliveryAttemptRepository attemptRepository = mock(DeliveryAttemptRepository.class);
         DeliveryResultService resultService = new DeliveryResultService(deliveryRepository, attemptRepository);
         when(deliveryRepository.claim(any(), any(), any(), anyInt(), anyLong(), any(), anyBoolean())).thenReturn(1);
+        WebhookPayload payload = mock(WebhookPayload.class);
+        when(payload.create(any())).thenAnswer(invocation -> ((Event) invocation.getArgument(0)).getPayload());
         deliveryService = new DeliveryService(eventService, endpointService, webhookSender, deliveryRepository,
-                attemptRepository, resultService, new DeliveryClaimService(deliveryRepository));
+                attemptRepository, resultService, new DeliveryClaimService(deliveryRepository), payload);
         savedStatuses = new ArrayList<>();
     }
 

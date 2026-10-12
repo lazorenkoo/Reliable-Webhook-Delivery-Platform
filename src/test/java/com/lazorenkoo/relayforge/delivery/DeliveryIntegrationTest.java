@@ -111,7 +111,7 @@ class DeliveryIntegrationTest {
         JsonNode result = jsonMapper.readTree(response.body());
         assertEquals(200, result.get("httpStatus").asInt());
         assertTrue(result.get("successful").asBoolean());
-        assertEquals(payload, receivedPayload.get());
+        assertEquals(jsonMapper.readTree(payload), jsonMapper.readTree(receivedPayload.get()).get("data"));
 
         Delivery delivery = deliveryRepository.findAll().getFirst();
         assertEquals(eventId, delivery.getEventId());
@@ -395,7 +395,7 @@ class DeliveryIntegrationTest {
         worker.sendPendingDeliveries();
 
         Delivery sent = deliveryRepository.findById(pending.getId()).orElseThrow();
-        assertEquals(payload, receivedPayload.get());
+        assertEquals(jsonMapper.readTree(payload), jsonMapper.readTree(receivedPayload.get()).get("data"));
         assertEquals(DeliveryStatus.SUCCEEDED, sent.getStatus());
         assertEquals(200, sent.getHttpStatus());
         assertNotNull(sent.getCompletedAt());
@@ -434,7 +434,7 @@ class DeliveryIntegrationTest {
         worker.sendPendingDeliveries();
 
         Delivery retried = deliveryRepository.findById(original.getId()).orElseThrow();
-        assertEquals("{\"orderId\":123}", receivedPayload.get());
+        assertEquals(123, jsonMapper.readTree(receivedPayload.get()).get("data").get("orderId").asInt());
         assertEquals(DeliveryStatus.SUCCEEDED, retried.getStatus());
         assertEquals(2, retried.getAttemptCount());
         assertEquals(200, retried.getHttpStatus());
@@ -730,7 +730,7 @@ class DeliveryIntegrationTest {
         ready.setNextAttemptAt(Instant.now().minusSeconds(1));
         deliveryRepository.save(ready);
         worker.sendPendingDeliveries();
-        assertEquals("{}", receivedPayload.get());
+        assertEquals(jsonMapper.readTree("{}"), jsonMapper.readTree(receivedPayload.get()).get("data"));
         assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(id).orElseThrow().getStatus());
         assertEquals(3, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).size());
     }
