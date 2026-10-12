@@ -316,6 +316,42 @@ class EndpointSubscriptionIntegrationTest {
         assertEquals(404, send("POST", "/api/v1/endpoints/999999/rotate-secret", null).statusCode());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", "wrong-key"})
+    void rejectsEventCreationWithoutValidApiKey(String key) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/api/v1/events"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"type\":\"order.created\",\"payload\":\"{}\"}"));
+        if (!key.isEmpty()) {
+            request.header("X-API-Key", key);
+        }
+
+        HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(401, response.statusCode());
+        assertEquals("application/json", response.headers().firstValue("Content-Type").orElseThrow().split(";")[0]);
+        assertEquals("Valid API key is required", jsonMapper.readTree(response.body()).get("error").asText());
+        assertFalse(response.body().contains("test-api-key"));
+        assertFalse(response.body().contains("wrong-key"));
+        assertEquals(0, eventRepository.count());
+        assertEquals(0, deliveryRepository.count());
+    }
+
+    @Test
+    void healthIsAvailableWithoutApiKey() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/health"))
+                .timeout(Duration.ofSeconds(10))
+                .GET().build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        assertEquals("OK", response.body());
+    }
+
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
                 "url", "https://example.com/webhook", "subscribedEvents", List.of("order.created")));
