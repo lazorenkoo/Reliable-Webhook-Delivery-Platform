@@ -73,6 +73,9 @@ class DeliveryIntegrationTest {
     private HttpServer receiver;
     private AtomicInteger receiverStatus;
     private AtomicReference<String> receivedPayload;
+    private AtomicReference<String> receivedSignature;
+    private AtomicReference<String> receivedTimestamp;
+    private AtomicReference<String> receivedEventId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -82,10 +85,16 @@ class DeliveryIntegrationTest {
         client = HttpClient.newHttpClient();
         receiverStatus = new AtomicInteger(200);
         receivedPayload = new AtomicReference<>();
+        receivedSignature = new AtomicReference<>();
+        receivedTimestamp = new AtomicReference<>();
+        receivedEventId = new AtomicReference<>();
         receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         receiver.createContext("/webhook", exchange -> {
             try (exchange) {
                 receivedPayload.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                receivedSignature.set(exchange.getRequestHeaders().getFirst("X-Webhook-Signature"));
+                receivedTimestamp.set(exchange.getRequestHeaders().getFirst("X-Webhook-Timestamp"));
+                receivedEventId.set(exchange.getRequestHeaders().getFirst("X-Webhook-Id"));
                 exchange.sendResponseHeaders(receiverStatus.get(), -1);
             }
         });
@@ -298,6 +307,17 @@ class DeliveryIntegrationTest {
         Delivery original = deliveryRepository.findAll().getFirst();
         receiverStatus.set(200);
 
+        String firstBody = receivedPayload.get();
+        JsonNode envelope = jsonMapper.readTree(firstBody);
+        assertEquals(eventId, envelope.get("id").asLong());
+        assertEquals("order.created", envelope.get("type").asText());
+        assertEquals(eventRepository.findById(eventId).orElseThrow().getCreatedAt(),
+                Instant.parse(envelope.get("createdAt").asText()));
+        assertEquals(1, envelope.get("data").get("orderId").asInt());
+        HttpResponse<String> rotated = send("POST", "/api/v1/endpoints/" + endpointId + "/rotate-secret", null);
+        assertEquals(200, rotated.statusCode());
+        String newSecret = jsonMapper.readTree(rotated.body()).get("secret").asText();
+
         HttpResponse<String> response = send("POST",
                 "/api/v1/deliveries/" + original.getId() + "/retry", null);
 
@@ -313,6 +333,10 @@ class DeliveryIntegrationTest {
         assertEquals(eventId, retried.getEventId());
         assertEquals(endpointId, retried.getEndpointId());
         assertEquals(200, retried.getHttpStatus());
+        assertEquals(firstBody, receivedPayload.get());
+        assertEquals(Long.toString(eventId), receivedEventId.get());
+        assertEquals(WebhookSignature.sign(newSecret, receivedTimestamp.get(), receivedPayload.get()),
+                receivedSignature.get());
     }
 
     @Test
@@ -779,6 +803,28 @@ class DeliveryIntegrationTest {
             assertNull(recovered.getHttpStatus());
             assertEquals("Processing expired before result was saved", recovered.getLastError());
         }
+    }
+
+    @Test
+    void missingSecretLeavesDeliveryPendingUntilRotation() throws Exception {
+        long endpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        jdbcTemplate.update("UPDATE webhook_endpoints SET signing_secret = NULL WHERE id = ?", endpointId);
+        Delivery delivery = new Delivery();
+        delivery.setEndpointId(endpointId);
+        delivery.setEventId(eventId);
+        long id = deliveryRepository.save(delivery).getId();
+
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> deliveryService.sendPending(id)).getStatusCode().value());
+        assertEquals(DeliveryStatus.PENDING, deliveryRepository.findById(id).orElseThrow().getStatus());
+        assertTrue(attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(id).isEmpty());
+        assertNull(receivedPayload.get());
+
+        assertEquals(200, send("POST", "/api/v1/endpoints/" + endpointId + "/rotate-secret", null).statusCode());
+        assertEquals(200, deliveryService.sendPending(id));
+        assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(id).orElseThrow().getStatus());
+        assertNotNull(receivedSignature.get());
     }
 
     private long createEndpoint() throws Exception {

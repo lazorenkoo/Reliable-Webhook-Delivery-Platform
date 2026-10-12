@@ -293,10 +293,33 @@ class EndpointSubscriptionIntegrationTest {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    @Test
+    void rotatesSecretWithoutExposingItInEndpointResponses() throws Exception {
+        long id = createEndpoint();
+        String previous = endpointRepository.findById(id).orElseThrow().getSigningSecret();
+        assertTrue(previous.matches("[0-9a-f]{64}"));
+
+        HttpResponse<String> rotated = send("POST", "/api/v1/endpoints/" + id + "/rotate-secret", null);
+
+        assertEquals(200, rotated.statusCode());
+        String secret = jsonMapper.readTree(rotated.body()).get("secret").asText();
+        assertTrue(secret.matches("[0-9a-f]{64}"));
+        assertNotEquals(previous, secret);
+        assertEquals(secret, endpointRepository.findById(id).orElseThrow().getSigningSecret());
+        HttpResponse<String> details = send("GET", "/api/v1/endpoints/" + id, null);
+        HttpResponse<String> list = send("GET", "/api/v1/endpoints", null);
+        assertNull(jsonMapper.readTree(details.body()).get("signingSecret"));
+        assertNull(jsonMapper.readTree(list.body()).get(0).get("signingSecret"));
+        assertFalse(details.body().contains(secret));
+        assertFalse(list.body().contains(secret));
+        assertEquals(404, send("POST", "/api/v1/endpoints/999999/rotate-secret", null).statusCode());
+    }
+
     private long createEndpoint() throws Exception {
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of(
                 "url", "https://example.com/webhook", "subscribedEvents", List.of("order.created")));
         assertEquals(201, response.statusCode());
+        assertNull(jsonMapper.readTree(response.body()).get("signingSecret"));
         return jsonMapper.readTree(response.body()).get("id").asLong();
     }
 
