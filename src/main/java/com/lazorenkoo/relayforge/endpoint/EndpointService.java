@@ -1,6 +1,5 @@
 package com.lazorenkoo.relayforge.endpoint;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Set;
 import java.security.SecureRandom;
@@ -14,14 +13,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class EndpointService {
 
     private final EndpointRepository endpointRepository;
+    private final WebhookUrlPolicy urlPolicy;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public EndpointService(EndpointRepository endpointRepository) {
+    public EndpointService(EndpointRepository endpointRepository, WebhookUrlPolicy urlPolicy) {
         this.endpointRepository = endpointRepository;
+        this.urlPolicy = urlPolicy;
     }
 
     public WebhookEndpoint create(String url, Set<String> subscribedEvents) {
-        validateUrl(url);
+        urlPolicy.validate(url);
         validateSubscriptions(subscribedEvents);
 
         WebhookEndpoint endpoint = new WebhookEndpoint();
@@ -81,24 +82,6 @@ public class EndpointService {
             if (eventType == null || eventType.isBlank() || eventType.length() > 255) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event types must contain 1 to 255 characters");
             }
-        }
-    }
-    private void validateUrl(String url) {
-        if (url == null || url.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL is required");
-        }
-
-        URI uri;
-        try {
-            uri = URI.create(url);
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid URL");
-        }
-
-        boolean http = "http".equalsIgnoreCase(uri.getScheme());
-        boolean https = "https".equalsIgnoreCase(uri.getScheme());
-        if ((!http && !https) || uri.getHost() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL must use HTTP or HTTPS and contain a host");
         }
     }
 }

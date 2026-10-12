@@ -13,6 +13,7 @@ public class HttpClientConfig {
     public HttpClient httpClient() {
         return HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 }
