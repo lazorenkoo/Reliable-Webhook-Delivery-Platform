@@ -2,6 +2,7 @@ package com.lazorenkoo.relayforge.endpoint;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -25,6 +26,16 @@ public class WebhookEndpoint {
     private String url;
 
     private boolean enabled = true;
+    private String signingSecret;
+
+    @JsonIgnore
+    public String getSigningSecret() {
+        return signingSecret;
+    }
+
+    public void setSigningSecret(String signingSecret) {
+        this.signingSecret = signingSecret;
+    }
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "endpoint_subscriptions", joinColumns = @JoinColumn(name = "endpoint_id"))

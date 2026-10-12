@@ -1,6 +1,7 @@
 package com.lazorenkoo.relayforge.endpoint;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +37,11 @@ public class EndpointController {
     @PatchMapping("/{id}/disable")
     public WebhookEndpoint disable(@PathVariable Long id) {
         return endpointService.disable(id);
+    }
+
+    @PostMapping("/{id}/rotate-secret")
+    public Map<String, String> rotateSecret(@PathVariable Long id) {
+        return Map.of("secret", endpointService.rotateSecret(id));
     }
 
     @PatchMapping("/{id}/enable")

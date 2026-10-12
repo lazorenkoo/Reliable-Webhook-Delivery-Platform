@@ -3,6 +3,8 @@ package com.lazorenkoo.relayforge.endpoint;
 import java.net.URI;
 import java.util.List;
 import java.util.Set;
+import java.security.SecureRandom;
+import java.util.HexFormat;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -12,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class EndpointService {
 
     private final EndpointRepository endpointRepository;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public EndpointService(EndpointRepository endpointRepository) {
         this.endpointRepository = endpointRepository;
@@ -24,6 +27,7 @@ public class EndpointService {
         WebhookEndpoint endpoint = new WebhookEndpoint();
         endpoint.setUrl(url);
         endpoint.setSubscribedEvents(subscribedEvents);
+        endpoint.setSigningSecret(generateSecret());
         return endpointRepository.save(endpoint);
     }
 
@@ -40,6 +44,20 @@ public class EndpointService {
         WebhookEndpoint endpoint = findById(id);
         endpoint.setEnabled(false);
         return endpointRepository.save(endpoint);
+    }
+
+    public String rotateSecret(Long id) {
+        WebhookEndpoint endpoint = findById(id);
+        String secret = generateSecret();
+        endpoint.setSigningSecret(secret);
+        endpointRepository.save(endpoint);
+        return secret;
+    }
+
+    private String generateSecret() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
     }
 
     public WebhookEndpoint enable(Long id) {
