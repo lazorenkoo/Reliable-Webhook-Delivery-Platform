@@ -1,0 +1,43 @@
+* { box-sizing: border-box; }
+body { margin: 24px; color: #222; background: #fff; font: 14px Arial, sans-serif; }
+header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+h1 { margin: 0; font-size: 20px; }
+h2 { margin: 0; font-size: 16px; }
+#connection { margin-right: auto; color: #666; font-size: 12px; }
+#count { color: #666; }
+button, input, select, textarea { font: inherit; }
+button { padding: 5px 10px; cursor: pointer; }
+button:disabled { cursor: default; }
+input, select, textarea { padding: 6px; min-width: 0; border: 1px solid #aaa; background: white; color: #222; }
+label { display: block; font-size: 12px; color: #666; }
+label input, label select, textarea { display: block; width: 100%; margin-top: 5px; }
+textarea { min-height: 85px; resize: vertical; font: 12px monospace; }
+.workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 24px; align-items: start; }
+.clients { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.client { min-width: 0; padding: 16px; border: 1px solid #aaa; border-radius: 12px; }
+.client-header { display: flex; gap: 8px; margin-bottom: 12px; }
+.client-header input { width: 100%; font-weight: bold; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.client > label { margin-bottom: 12px; }
+.client form { margin-top: 12px; }
+.client form label { margin-bottom: 10px; }
+.client form button { margin-bottom: 12px; }
+.global { position: sticky; top: 20px; border: 1px solid #aaa; border-radius: 12px; padding: 16px; min-width: 0; }
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.logs { height: 180px; overflow: auto; border-top: 1px solid #ddd; font: 12px monospace; overflow-wrap: anywhere; }
+.global-logs { height: calc(100vh - 150px); min-height: 240px; }
+.log { padding: 10px 0; border-bottom: 1px solid #ddd; line-height: 1.5; }
+.log button { margin-top: 5px; font: 12px Arial, sans-serif; }
+.success { color: #176838; }
+.error { color: #a32727; }
+.waiting { color: #806000; }
+.empty { color: #888; padding: 12px 0; }
+#notice { padding: 8px; background: #f3f3f3; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; font: 12px monospace; }
+dialog { width: min(850px, calc(100% - 32px)); max-height: 85vh; overflow: auto; padding: 18px; border: 1px solid #aaa; }
+dialog::backdrop { background: #0003; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+th, td { border-bottom: 1px solid #ddd; padding: 8px 6px; }
+@media (max-width: 1100px) { .clients { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { body { margin: 14px; } .workspace { grid-template-columns: 1fr; } .global { position: static; } .global-logs { height: 350px; } }
+.compose { margin-bottom: 12px; } summary { cursor: pointer; }

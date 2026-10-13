@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RelayForge</title>
+  <link rel="stylesheet" href="/clients.css?v=2">
+  <script src="/workbench.js?v=6" defer></script>
+</head>
+<body>
+  <header><h1>RelayForge</h1><span id="connection">Connecting</span><button id="example">Example</button><button id="add">Add client</button><span id="count"></span></header>
+  <p id="notice" role="status" hidden></p>
+  <main class="workspace">
+    <div id="clients" class="clients"></div>
+    <aside class="global">
+      <div class="section-header"><h2>Logs</h2><select id="filter" aria-label="Filter deliveries"><option value="all">All</option><option>PENDING</option><option>PROCESSING</option><option>SUCCEEDED</option><option>FAILED</option></select></div>
+      <div id="deliveries" class="logs global-logs" tabindex="0" aria-label="All delivery logs"></div>
+    </aside>
+  </main>
+  <dialog id="details"><div class="section-header"><h2 id="detail-title"></h2><button id="close">Close</button></div><div id="detail-body"></div></dialog>
+</body>
+</html>

@@ -1,0 +1,45 @@
+name: relayforge-demo
+
+services:
+  demo:
+    build:
+      context: .
+      dockerfile: demo/Dockerfile
+    image: relayforge-demo:local
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      DEMO_RELAY_URL: http://app:8080
+      DEMO_RECEIVER_URL: http://demo:8090
+      RELAYFORGE_API_KEY: demo-local-key
+    depends_on:
+      - app
+  app:
+    build: .
+    image: relayforge-demo-app:local
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/relayforge_demo
+      SPRING_DATASOURCE_USERNAME: demo
+      SPRING_DATASOURCE_PASSWORD: demo
+      RELAYFORGE_API_KEY: demo-local-key
+      RELAYFORGE_WEBHOOK_PROXY_HOST: ""
+      RELAYFORGE_WEBHOOKS_ALLOW_LOCAL: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: relayforge_demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    volumes:
+      - demo_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d relayforge_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  demo_data:
