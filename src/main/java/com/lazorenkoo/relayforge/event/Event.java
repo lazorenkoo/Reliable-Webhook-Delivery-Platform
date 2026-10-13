@@ -24,6 +24,17 @@ public class Event {
     private String payload;
     private Instant createdAt;
 
+    @Column(unique = true)
+    private String idempotencyKey;
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
     @PrePersist
     private void onCreate() {
         createdAt = Instant.now();
