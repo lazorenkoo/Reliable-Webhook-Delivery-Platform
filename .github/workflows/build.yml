@@ -24,4 +24,6 @@ jobs:
       - name: Check Docker
         run: docker info
       - name: Build and test
-        run: bash ./mvnw -B verify
+        run: |
+          bash ./mvnw -B verify
+          bash ./mvnw -B -f demo/pom.xml verify
