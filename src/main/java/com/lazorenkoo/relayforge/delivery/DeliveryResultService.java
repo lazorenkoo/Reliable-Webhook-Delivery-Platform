@@ -46,6 +46,24 @@ public class DeliveryResultService {
     }
 
     @Transactional
+    public void rejectBlocked(Long id, long version, String reason) {
+        Delivery delivery = deliveryRepository.findForUpdate(id).orElse(null);
+        if (delivery == null || delivery.getProcessingVersion() != version) {
+            return;
+        }
+        boolean pending = delivery.getStatus() == DeliveryStatus.PENDING;
+        boolean retry = delivery.getStatus() == DeliveryStatus.FAILED && delivery.getNextAttemptAt() != null;
+        if (!pending && !retry) {
+            return;
+        }
+        delivery.setStatus(DeliveryStatus.FAILED);
+        delivery.setNextAttemptAt(null);
+        delivery.setCompletedAt(Instant.now());
+        delivery.setLastError("Webhook URL blocked: " + reason);
+        deliveryRepository.save(delivery);
+    }
+
+    @Transactional
     public void recover(Long id, Instant cutoff) {
         Delivery delivery = deliveryRepository.findForUpdate(id).orElse(null);
         if (delivery == null || delivery.getStatus() != DeliveryStatus.PROCESSING) {

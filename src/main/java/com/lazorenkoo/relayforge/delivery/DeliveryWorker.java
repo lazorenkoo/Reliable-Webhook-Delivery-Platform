@@ -1,6 +1,7 @@
 package com.lazorenkoo.relayforge.delivery;
 
 import java.time.Instant;
+import com.lazorenkoo.relayforge.endpoint.BlockedWebhookUrlException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,9 @@ public class DeliveryWorker {
             try {
                 deliveryService.sendPending(delivery.getId());
             } catch (ResponseStatusException exception) {
+                if (exception instanceof BlockedWebhookUrlException) {
+                    resultService.rejectBlocked(delivery.getId(), delivery.getProcessingVersion(), exception.getReason());
+                }
                 logger.warn("Delivery {} could not be sent: {}", delivery.getId(), exception.getReason());
             }
         }
@@ -54,6 +58,9 @@ public class DeliveryWorker {
             try {
                 deliveryService.sendScheduledRetry(delivery.getId());
             } catch (ResponseStatusException exception) {
+                if (exception instanceof BlockedWebhookUrlException) {
+                    resultService.rejectBlocked(delivery.getId(), delivery.getProcessingVersion(), exception.getReason());
+                }
                 logger.warn("Delivery {} retry failed: {}", delivery.getId(), exception.getReason());
             }
         }

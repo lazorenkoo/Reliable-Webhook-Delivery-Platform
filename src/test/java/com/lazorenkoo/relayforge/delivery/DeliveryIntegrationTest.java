@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "spring.datasource.driver-class-name=org.testcontainers.jdbc.ContainerDatabaseDriver",
         "spring.datasource.username=test",
         "spring.datasource.password=test",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=validate"
 })
 class DeliveryIntegrationTest {
 
@@ -827,6 +827,51 @@ class DeliveryIntegrationTest {
         assertNotNull(receivedSignature.get());
     }
 
+    @Test
+    void blockedDeliveryDoesNotPreventSendingTheNextOne() throws Exception {
+        long blockedEndpointId = createEndpoint();
+        long allowedEndpointId = createEndpoint();
+        long eventId = createEvent("{}");
+        var endpoint = endpointRepository.findById(blockedEndpointId).orElseThrow();
+        endpoint.setUrl(endpoint.getUrl() + "#blocked");
+        endpointRepository.save(endpoint);
+        Delivery blocked = new Delivery();
+        blocked.setEventId(eventId);
+        blocked.setEndpointId(blockedEndpointId);
+        long blockedId = deliveryRepository.save(blocked).getId();
+        Delivery allowed = new Delivery();
+        allowed.setEventId(eventId);
+        allowed.setEndpointId(allowedEndpointId);
+        long allowedId = deliveryRepository.save(allowed).getId();
+        DeliveryWorker worker = new DeliveryWorker(deliveryRepository, deliveryService, resultService);
+
+        worker.sendPendingDeliveries();
+
+        Delivery rejected = deliveryRepository.findById(blockedId).orElseThrow();
+        assertEquals(DeliveryStatus.FAILED, rejected.getStatus());
+        assertEquals(0, rejected.getAttemptCount());
+        assertNull(rejected.getNextAttemptAt());
+        assertTrue(rejected.getLastError().startsWith("Webhook URL blocked:"));
+        assertTrue(attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(blockedId).isEmpty());
+        assertEquals(DeliveryStatus.SUCCEEDED, deliveryRepository.findById(allowedId).orElseThrow().getStatus());
+        assertEquals(1, attemptRepository.findByDeliveryIdOrderByAttemptNumberAsc(allowedId).size());
+        receivedPayload.set(null);
+        worker.sendPendingDeliveries();
+        assertNull(receivedPayload.get());
+
+        Delivery pending = new Delivery();
+        pending.setEventId(eventId);
+        pending.setEndpointId(allowedEndpointId);
+        pending = deliveryRepository.save(pending);
+        long oldVersion = pending.getProcessingVersion();
+        new DeliveryClaimService(deliveryRepository).claim(pending, DeliveryStatus.PENDING);
+        resultService.rejectBlocked(pending.getId(), oldVersion, "Stale URL check");
+        Delivery current = deliveryRepository.findById(pending.getId()).orElseThrow();
+        assertEquals(DeliveryStatus.PROCESSING, current.getStatus());
+        assertEquals(pending.getProcessingVersion(), current.getProcessingVersion());
+        assertNull(current.getLastError());
+    }
+
     private long createEndpoint() throws Exception {
         String url = "http://127.0.0.1:" + receiver.getAddress().getPort() + "/webhook";
         HttpResponse<String> response = send("POST", "/api/v1/endpoints", Map.of("url", url));
@@ -844,7 +889,8 @@ class DeliveryIntegrationTest {
     private HttpResponse<String> send(String method, String path, Object body) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + path))
-                .timeout(Duration.ofSeconds(20));
+                .timeout(Duration.ofSeconds(20))
+                .header("X-API-Key", "test-api-key");
         if (body == null) {
             request.method(method, HttpRequest.BodyPublishers.noBody());
         } else {
